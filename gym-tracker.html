@@ -412,8 +412,8 @@ function renderLog() {
   html+='</div>';
 
   // How-to hint
-  html+='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--text2);line-height:1.6;">'
-    +'<strong style="color:var(--text);">Scroll</strong> the wheels to set weight and reps, then tap <strong style="color:var(--col-done);">✓</strong> to mark each set done.'
+  html+='<div style="background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--text);line-height:1.6;">'
+    +'<strong style="color:'+t.color+';">Scroll</strong> the wheels to set weight and reps, then tap <strong style="color:var(--col-done);">✓</strong> to mark each set done.'
     +'</div>';
 
   if(logState.exercises.length===0){
@@ -422,39 +422,48 @@ function renderLog() {
     logState.exercises.forEach(function(ex,ei){
       var prev=getLastSets(ex.name);
       var doneSets=ex.sets.filter(function(s){return s.done;}).length;
-      html+='<div class="card" style="margin-bottom:14px;">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">'
-        +'<div><div style="font-size:16px;font-weight:800;">'+esc(ex.name)+'</div>'
-        +(doneSets>0?'<div style="font-size:12px;color:var(--col-done);font-weight:700;margin-top:1px;">'+doneSets+' set'+(doneSets!==1?'s':'')+' done ✓</div>':'')
+      var allDone=ex.sets.length>0&&doneSets===ex.sets.length;
+
+      // Exercise card with coloured header band
+      html+='<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden;border-color:'+t.color+';">'
+        // Coloured header
+        +'<div style="background:'+t.bg+';padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">'
+        +'<div>'
+        +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:'+t.color+';margin-bottom:1px;">Exercise '+(ei+1)+'</div>'
+        +'<div style="font-size:16px;font-weight:800;color:var(--text);">'+esc(ex.name)+'</div>'
+        +(doneSets>0?'<div style="font-size:12px;color:var(--col-done);font-weight:700;margin-top:1px;">'+doneSets+' / '+ex.sets.length+' sets done ✓</div>':'')
         +'</div>'
-        +'<button class="btn-icon" onclick="removeLogEx('+ei+')" style="color:var(--col-lower);background:var(--col-lower-bg);border:none;">✕</button>'
-        +'</div>';
+        +'<button class="btn-icon" onclick="removeLogEx('+ei+')" style="color:var(--col-lower);background:rgba(0,0,0,0.08);border:none;">✕</button>'
+        +'</div>'
+        // Card body
+        +'<div style="padding:12px 14px;">';
 
       if(prev){
-        var ps=prev.map(function(s,i){return 'Set '+(i+1)+': '+(s.weight||'—')+'kg × '+(s.reps||'—');}).join('  ·  ');
-        html+='<div style="font-size:12px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:7px 10px;margin-bottom:10px;">📊 Last: '+esc(ps)+'</div>';
+        var ps=prev.map(function(s,i){return (s.weight||'—')+'kg×'+(s.reps||'—');}).join(' · ');
+        html+='<div style="font-size:12px;font-weight:600;color:'+t.color+';background:'+t.bg+';border-radius:8px;padding:7px 10px;margin-bottom:10px;">📊 Last session: '+esc(ps)+'</div>';
       }
 
       ex.sets.forEach(function(set,si){
         var isDone=!!set.done;
-        html+='<div class="set-block'+(isDone?' set-done':'')+'">'
+        html+='<div class="set-block'+(isDone?' set-done':'')+'" style="'+(isDone?'':'border-left:3px solid '+t.color+';')+'">'
           +'<div class="set-block-header">'
-          +'<span class="set-num-label">Set '+(si+1)+'</span>'
-          +(isDone?'<span class="set-done-label">Done ✓</span>':'')
+          +'<span class="set-num-label" style="color:'+t.color+';">Set '+(si+1)+'</span>'
+          +(isDone?'<span class="set-done-label">Done ✓</span>':'<span style="font-size:12px;color:var(--text2);">scroll to set values</span>')
           +'<button class="tick-btn'+(isDone?' done':'')+'" onclick="toggleDone('+ei+','+si+')">'+(isDone?'✓':'')+'</button>'
           +'</div>'
           +'<div class="set-drums">'
-          +'<div class="drum-group"><div class="drum-group-label">Weight (kg)</div>'+makeDrumHTML(WEIGHT_VALS,'dw-'+ei+'-'+si)+'</div>'
-          +'<div class="drum-group"><div class="drum-group-label">Reps</div>'+makeDrumHTML(REP_VALS,'dr-'+ei+'-'+si)+'</div>'
+          +'<div class="drum-group"><div class="drum-group-label" style="color:'+t.color+';">Weight (kg)</div>'+makeDrumHTML(WEIGHT_VALS,'dw-'+ei+'-'+si)+'</div>'
+          +'<div class="drum-group"><div class="drum-group-label" style="color:'+t.color+';">Reps</div>'+makeDrumHTML(REP_VALS,'dr-'+ei+'-'+si)+'</div>'
           +'</div>'
           +'<div class="note-input-row"><input type="text" placeholder="Note (optional)…" value="'+esc(set.note||'')+'" oninput="updateNote('+ei+','+si+',this.value)"></div>'
           +'</div>';
       });
 
       html+='<div style="display:flex;gap:8px;margin-top:8px;">'
-        +'<button class="btn btn-ghost" onclick="addSet('+ei+')">+ Add set</button>'
+        +'<button class="btn btn-ghost" style="color:'+t.color+';" onclick="addSet('+ei+')">+ Add set</button>'
         +(ex.sets.length>1?'<button class="btn btn-ghost" style="color:var(--text2);" onclick="removeLastSet('+ei+')">− Remove last</button>':'')
-        +'</div></div>';
+        +'</div>'
+        +'</div></div>'; // close body + card
     });
   }
 
