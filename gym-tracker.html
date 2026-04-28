@@ -248,12 +248,111 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '1.3.0';
+var APP_VERSION = '1.4.0';
 
 // ─── STORAGE ───
 var _mem = {};
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return _mem[k]||null; } }
 function lsSet(k,v) { try { localStorage.setItem(k,v); } catch(e) { _mem[k]=v; } }
+
+// ─── GITHUB SYNC ───
+var GH_API = 'https://api.github.com/repos/hitenshah-uk/gym-data/contents/';
+
+function ghFetch(path, opts) {
+  var token = getSettings().githubToken;
+  if (!token) return Promise.reject('no_token');
+  var headers = { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' };
+  if (opts && opts.body) headers['Content-Type'] = 'application/json';
+  return fetch(GH_API + path, Object.assign({ headers: headers }, opts || {}));
+}
+function b64enc(str) {
+  var bytes = new TextEncoder().encode(str);
+  var bin = Array.from(bytes, function(b){ return String.fromCharCode(b); }).join('');
+  return btoa(bin);
+}
+function b64dec(str) {
+  var bin = atob(str.replace(/\n/g,''));
+  var bytes = new Uint8Array(bin.length);
+  for (var i=0; i<bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+function ghGetSessions() {
+  return ghFetch('sessions.json').then(function(r) {
+    if (r.status === 404) return { sessions:[], sha:null };
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    return r.json().then(function(data) {
+      return { sessions: JSON.parse(b64dec(data.content)), sha: data.sha };
+    });
+  }).catch(function(e) { return e === 'no_token' ? null : null; });
+}
+function ghPutSessions(sessions, sha) {
+  var body = { message: 'Sync ' + new Date().toISOString().slice(0,10), content: b64enc(JSON.stringify(sessions)) };
+  if (sha) body.sha = sha;
+  return ghFetch('sessions.json', { method:'PUT', body: JSON.stringify(body) })
+    .then(function(r){ return r.ok; }).catch(function(){ return false; });
+}
+function mergeSessions(a, b) {
+  var seen = {}, merged = [];
+  (a||[]).concat(b||[]).forEach(function(s){ if (!seen[s.id]){ seen[s.id]=true; merged.push(s); } });
+  merged.sort(function(a,b){ return a.date < b.date ? -1 : 1; });
+  return merged;
+}
+function setSyncMeta(status, time) {
+  lsSet('gymSyncStatus', status);
+  if (time) lsSet('gymLastSync', time);
+}
+function updateSyncUI() {
+  var pill = document.getElementById('sync-status-pill');
+  var lastEl = document.getElementById('sync-last-time');
+  if (!pill) return;
+  var status = lsGet('gymSyncStatus') || 'not_configured';
+  var map = {
+    synced:         { text:'● Synced',          color:'var(--col-pull)' },
+    error:          { text:'● Sync error',       color:'var(--col-lower)' },
+    syncing:        { text:'● Syncing…',         color:'var(--accent)' },
+    not_configured: { text:'● Not configured',   color:'var(--text2)' }
+  };
+  var m = map[status] || map.not_configured;
+  pill.textContent = m.text;
+  pill.style.color = m.color;
+  if (lastEl) {
+    var last = lsGet('gymLastSync');
+    lastEl.textContent = last ? 'Last synced: ' + new Date(last).toLocaleString('en-GB') : '';
+  }
+}
+function syncToGitHub(showFeedback) {
+  if (!getSettings().githubToken) {
+    if (showFeedback) showToast('Add your GitHub token in Settings first');
+    setSyncMeta('not_configured', null);
+    updateSyncUI();
+    return;
+  }
+  setSyncMeta('syncing', null);
+  updateSyncUI();
+  var local = getAllSessions();
+  ghGetSessions().then(function(result) {
+    if (!result) {
+      setSyncMeta('error', null);
+      updateSyncUI();
+      if (showFeedback) showToast('Sync failed — check your connection');
+      return;
+    }
+    var merged = mergeSessions(local, result.sessions);
+    lsSet('gymSessions', JSON.stringify(merged));
+    ghPutSessions(merged, result.sha).then(function(ok) {
+      if (ok) {
+        setSyncMeta('synced', new Date().toISOString());
+        if (showFeedback) showToast('Synced ✓');
+        if (document.getElementById('screen-history') &&
+            document.getElementById('screen-history').classList.contains('active')) renderHistory();
+      } else {
+        setSyncMeta('error', null);
+        if (showFeedback) showToast('Sync failed — check your token');
+      }
+      updateSyncUI();
+    });
+  });
+}
 
 // ─── WEIGHT VALS (dynamic based on drum increment) ───
 var WEIGHT_VALS = [];
@@ -349,6 +448,7 @@ function updateSetting(key, val) {
   var s = getSettings(); s[key] = val; writeSettings(s);
   if (['age','heightCm','weightKg','bodyFatPct','activityLevel'].indexOf(key) !== -1) updateSettingsCalcs();
   if (key === 'drumIncrement') buildWeightVals();
+  if (key === 'githubToken' && val) setTimeout(function(){ syncToGitHub(true); }, 300);
 }
 
 // ─── CALCULATIONS ───
@@ -699,6 +799,7 @@ function doSaveSession() {
   showToast('Session saved ✓');
   logState.selectedDay=null; logState.exercises=[];
   renderLog();
+  syncToGitHub(false);
 }
 
 // ─── HISTORY SCREEN ───
@@ -887,7 +988,6 @@ function renderSettings() {
     +'</div></div>'
     +'</div>';
 
-  // GitHub Sync (placeholder for Stage 2)
   html += '<div class="settings-section-title">GitHub Sync</div>';
   html += '<div class="card">'
     +'<div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px;">Cross-device sync saves your sessions to a private GitHub repository so your data is available on any device. Enter your token below — full sync functionality coming in the next update.</div>'
@@ -896,14 +996,18 @@ function renderSettings() {
     +'<input type="password" id="github-token-input" value="'+esc(s.githubToken)+'" placeholder="ghp_xxxxxxxxxxxx" oninput="updateSetting(\'githubToken\',this.value)" style="text-align:left;">'
     +'<button class="token-toggle" onclick="toggleTokenVisibility()">Show</button>'
     +'</div>'
-    +'<div style="margin-top:10px;display:flex;align-items:center;gap:8px;">'
-    +(s.githubToken?'<span class="status-pill saved">● Token saved</span>':'<span class="status-pill empty">● Not configured</span>')
-    +'<span style="font-size:12px;color:var(--text2);">Sync coming in v1.4.0</span>'
+    +'<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
+    +'<div style="display:flex;align-items:center;gap:8px;">'
+    +'<span id="sync-status-pill" style="font-size:13px;font-weight:700;"></span>'
     +'</div>'
+    +(s.githubToken?'<button class="btn btn-secondary" style="height:36px;font-size:13px;padding:0 14px;" onclick="syncToGitHub(true)">Sync now</button>':'')
+    +'</div>'
+    +'<div id="sync-last-time" style="font-size:12px;color:var(--text2);margin-top:4px;"></div>'
     +'</div>';
 
   html += '<div style="height:8px;"></div>';
   c.innerHTML = html;
+  updateSyncUI();
 }
 
 function build1RMResult(w, r) {
@@ -978,13 +1082,7 @@ function toggleTokenVisibility() {
 (function() {
   if (!lsGet('gymPlan')) writePlan(JSON.parse(JSON.stringify(DEFAULT_PLAN)));
   buildWeightVals();
-})();
-
-renderPlan();
-document.getElementById('app-version').textContent = 'v' + APP_VERSION;
-</script>
-</body>
-</html>
+  setTimeout(function(){ syncToGitHub(false); }, 1000);
 })();
 
 renderPlan();
