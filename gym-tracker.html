@@ -406,13 +406,13 @@ var DAYS = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunda
 var DAY_SHORT = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 // DAY_THEME removed — colours now derived from session label via thLabel()
 var DEFAULT_PLAN = {
-  Monday:    { rest:true,  cardioType:'none',      cardioConfig:{},                                                label:'Rest',            exercises:[] },
-  Tuesday:   { rest:false, cardioType:'intervals', cardioConfig:{ warmUp:5, work:40, rest:90, rounds:10, coolDown:5 }, label:'Upper Push', exercises:['Chest press machine','Shoulder press machine','Cable chest fly','Tricep pushdown','Cable lateral raise'] },
-  Wednesday: { rest:false, cardioType:'steady',    cardioConfig:{ warmUp:5, duration:30, coolDown:5 },            label:'Lower Body',      exercises:['Leg press','Leg curl','Leg extension','Hip abductor machine','Seated calf raises'] },
-  Thursday:  { rest:false, cardioType:'intervals', cardioConfig:{ warmUp:5, work:40, rest:90, rounds:10, coolDown:5 }, label:'Upper Pull', exercises:['Lat pulldown','Seated cable row','Face pulls','Cable rear delt fly','Bicep curl'] },
-  Friday:    { rest:true,  cardioType:'none',      cardioConfig:{},                                                label:'Rest',            exercises:[] },
-  Saturday:  { rest:true,  cardioType:'none',      cardioConfig:{},                                                label:'Rest',            exercises:[] },
-  Sunday:    { rest:false, cardioType:'steady',    cardioConfig:{ warmUp:5, duration:30, coolDown:5 },            label:'Full Body + Core',exercises:['Compound machine of choice','Dead bugs','Plank variations','Pallof press','Hanging leg raises'] }
+  Monday:    { rest:true,  cardioType:'none',      cardioConfig:{},                                                        label:'Rest',             exercises:[] },
+  Tuesday:   { rest:false, cardioType:'intervals', cardioConfig:{ warmUp:5, work:40, rest:90, rounds:10, coolDown:5 },     label:'Push',             exercises:['Chest press machine','Shoulder press machine','Cable lateral raise','Cable tricep pushdown','Dead bug'] },
+  Wednesday: { rest:false, cardioType:'steady',    cardioConfig:{ warmUp:5, duration:30, coolDown:5 },                     label:'Pull',             exercises:['Seated cable row','Lat pulldown','Cable face pull','Cable bicep curl','Captain\'s chair knee raise'] },
+  Thursday:  { rest:false, cardioType:'intervals', cardioConfig:{ warmUp:5, work:40, rest:90, rounds:10, coolDown:5 },     label:'Legs',             exercises:['Leg press','Leg curl','Leg extension','Cable pull-through','Seated calf raise'] },
+  Friday:    { rest:true,  cardioType:'none',      cardioConfig:{},                                                        label:'Rest',             exercises:[] },
+  Saturday:  { rest:true,  cardioType:'none',      cardioConfig:{},                                                        label:'Rest',             exercises:[] },
+  Sunday:    { rest:false, cardioType:'steady',    cardioConfig:{ warmUp:5, duration:30, coolDown:5 },                     label:'Full Body + Core', exercises:['Cable squat','Chest press machine','Seated cable row','Pallof press','Mobility session'] }
 };
 var ACTIVITY_LEVELS = [
   { value:1.2,   label:'Sedentary (desk job)' },
