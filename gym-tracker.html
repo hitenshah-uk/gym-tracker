@@ -1938,56 +1938,56 @@ function parseVeSyncCSV(text) {
   return Object.values(results).sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
 }
 
+function _processImportParsed(parsed) {
+  var s=getSettings();
+  var existingDates={};
+  (s.weightLog||[]).forEach(function(entry){ existingDates[entry.date]=true; });
+  _pendingImport=parsed.filter(function(entry){ return !existingDates[entry.date]; });
+  var skipped=parsed.length-_pendingImport.length;
+  var preview=document.getElementById('csv-import-preview');
+  if (!preview) return;
+  if (parsed.length===0) {
+    preview.innerHTML='<div style="margin-top:10px;padding:10px;background:var(--bg2);border-radius:8px;font-size:13px;color:var(--text2);">No valid rows found. Make sure this is a VeSync export CSV.</div>';
+    return;
+  }
+  var withBF=_pendingImport.filter(function(e){ return e.bodyFat!==''; }).length;
+  var h='<div style="margin-top:12px;">';
+  h+='<div style="padding:10px 12px;background:var(--bg2);border-radius:8px;margin-bottom:10px;">';
+  h+='<div style="font-size:13px;font-weight:700;margin-bottom:4px;">Import summary</div>';
+  h+='<div style="font-size:13px;color:var(--text2);line-height:1.7;">';
+  h+='Readings in file: <strong style="color:var(--text);">'+parsed.length+'</strong><br>';
+  h+='New dates to add: <strong style="color:var(--accent);">'+_pendingImport.length+'</strong><br>';
+  if (skipped>0) h+='Already logged (skipped): <strong style="color:var(--text2);">'+skipped+'</strong><br>';
+  if (withBF>0) h+='New entries with body fat %: <strong style="color:var(--text);">'+withBF+'</strong>';
+  h+='</div></div>';
+  if (_pendingImport.length===0) {
+    h+='<div style="font-size:13px;color:var(--text2);text-align:center;padding:6px 0;">All dates already in your log — nothing to import.</div>';
+    h+='</div>';
+    preview.innerHTML=h; return;
+  }
+  h+='<div style="margin-bottom:10px;">';
+  h+='<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:6px;">What to import</div>';
+  h+='<div class="seg-btn">';
+  h+='<button id="import-mode-weight" class="seg-btn-opt active" onclick="setImportMode(\'weight\')">Weight only</button>';
+  h+='<button id="import-mode-both" class="seg-btn-opt" onclick="setImportMode(\'both\')" '+(withBF===0?'disabled title="No body fat data in these entries"':'')+'>Weight + Body fat %</button>';
+  h+='</div>';
+  if (withBF>0) h+='<div style="font-size:11px;color:var(--text2);margin-top:5px;">Note: body fat % from bioelectrical impedance scales may be inaccurate — use with caution.</div>';
+  h+='</div>';
+  h+='<button class="btn btn-primary btn-full" onclick="confirmCSVImport()">Import '+_pendingImport.length+' entr'+((_pendingImport.length===1)?'y':'ies')+'</button>';
+  h+='</div>';
+  _importMode='weight';
+  preview.innerHTML=h;
+}
+
 function handleCSVImport(input) {
   var file=input.files&&input.files[0];
   if (!file) return;
   var reader=new FileReader();
-  reader.onload=function(e) {
-    var parsed=parseVeSyncCSV(e.target.result);
-    var s=getSettings();
-    var existingDates={};
-    (s.weightLog||[]).forEach(function(entry){ existingDates[entry.date]=true; });
-    _pendingImport=parsed.filter(function(entry){ return !existingDates[entry.date]; });
-    var skipped=parsed.length-_pendingImport.length;
-    var preview=document.getElementById('csv-import-preview');
-    if (!preview) return;
-    if (parsed.length===0) {
-      preview.innerHTML='<div style="margin-top:10px;padding:10px;background:var(--bg2);border-radius:8px;font-size:13px;color:var(--text2);">No valid rows found in this file. Make sure it is a VeSync export CSV.</div>';
-      input.value=''; return;
-    }
-    var withBF=_pendingImport.filter(function(e){ return e.bodyFat!==''; }).length;
-    var h='<div style="margin-top:12px;">';
-    h+='<div style="padding:10px 12px;background:var(--bg2);border-radius:8px;margin-bottom:10px;">';
-    h+='<div style="font-size:13px;font-weight:700;margin-bottom:4px;">Import summary</div>';
-    h+='<div style="font-size:13px;color:var(--text2);line-height:1.7;">';
-    h+='Readings in file: <strong style="color:var(--text);">'+parsed.length+'</strong><br>';
-    h+='New dates to add: <strong style="color:var(--accent);">'+_pendingImport.length+'</strong><br>';
-    if (skipped>0) h+='Already logged (skipped): <strong style="color:var(--text2);">'+skipped+'</strong><br>';
-    if (withBF>0) h+='New entries with body fat %: <strong style="color:var(--text);">'+withBF+'</strong>';
-    h+='</div></div>';
-    if (_pendingImport.length===0) {
-      h+='<div style="font-size:13px;color:var(--text2);text-align:center;padding:6px 0;">All dates already in your log — nothing to import.</div>';
-      h+='</div>';
-      preview.innerHTML=h; input.value=''; return;
-    }
-    // Import mode selector
-    h+='<div style="margin-bottom:10px;">';
-    h+='<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:6px;">What to import</div>';
-    h+='<div class="seg-btn">';
-    h+='<button id="import-mode-weight" class="seg-btn-opt '+(withBF>0?'active':'')+'" onclick="setImportMode(\'weight\')">Weight only</button>';
-    h+='<button id="import-mode-both" class="seg-btn-opt" onclick="setImportMode(\'both\')" '+(withBF===0?'disabled title="No body fat data in these entries"':'')+'>Weight + Body fat %</button>';
-    h+='</div>';
-    if (withBF>0) h+='<div style="font-size:11px;color:var(--text2);margin-top:5px;">Note: body fat % from bioelectrical impedance scales may be inaccurate — use with caution.</div>';
-    h+='</div>';
-    // Confirm button
-    h+='<button class="btn btn-primary btn-full" onclick="confirmCSVImport()">Import '+_pendingImport.length+' entr'+((_pendingImport.length===1)?'y':'ies')+'</button>';
-    h+='</div>';
-    _importMode='weight';
-    preview.innerHTML=h;
-    input.value='';
-  };
+  reader.onload=function(e){ _processImportParsed(parseVeSyncCSV(e.target.result)); };
   reader.readAsText(file);
+  input.value='';
 }
+
 
 function setImportMode(mode) {
   _importMode=mode;
