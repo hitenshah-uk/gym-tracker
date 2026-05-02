@@ -322,7 +322,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.7.0';
+var APP_VERSION = '2.8.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -1848,6 +1848,14 @@ function renderProgress() {
     +'</div>'
     +'<button class="btn btn-secondary btn-full" onclick="addWeightEntry()" style="margin-top:10px;">+ Add entry</button>'
     +'</div>';
+  // Import from VeSync
+  html+='<div class="settings-section-title">Import from VeSync</div>';
+  html+='<div class="card">'
+    +'<div style="font-size:13px;color:var(--text2);margin-bottom:10px;line-height:1.6;">Import your weigh-in history from the VeSync app. Export a CSV from VeSync, then select it below — only dates not already in your log will be added.</div>'
+    +'<label class="btn btn-secondary btn-full" for="vesync-csv-input" style="cursor:pointer;display:block;text-align:center;">📥 Choose VeSync CSV</label>'
+    +'<input type="file" id="vesync-csv-input" accept=".csv,text/csv" style="display:none;" onchange="handleCSVImport(this)">'
+    +'<div id="csv-import-preview"></div>'
+    +'</div>';
   // Charts
   if (weightData.length>=1) {
     html+='<div class="settings-section-title">Weight Trend</div>';
@@ -1882,6 +1890,139 @@ function renderProgress() {
     if (weightData.length>=1) drawBodyChart('chart-weight', weightData, isDark?'#60a5fa':'#2563eb', 67, '67kg target', 'kg');
     if (bfData.length>=1) drawBodyChart('chart-bf', bfData, isDark?'#fb923c':'#ea580c', 25, '25% target', '%');
   }, 0);
+}
+
+// ─── VESYNC CSV IMPORT ───
+var _pendingImport=[];
+var _importMode='weight'; // 'weight' | 'both'
+
+function parseVeSyncCSV(text) {
+  // Strip BOM
+  if (text.charCodeAt(0)===0xFEFF) text=text.slice(1);
+  var lines=text.split(/\r?\n/);
+  var results={};
+  for (var i=1;i<lines.length;i++) {
+    var line=lines[i].trim();
+    if (!line) continue;
+    // Handle quoted first field: "DD/MM/YYYY, HH:MM",weight,...
+    var m=line.match(/^"([^"]+)"\s*,(.*)$/);
+    if (!m) continue;
+    var timeStr=m[1].trim(); // "DD/MM/YYYY, HH:MM"
+    var rest=m[2].split(',');
+    // Parse date DD/MM/YYYY
+    var dtParts=timeStr.split(',')[0].trim().split('/');
+    if (dtParts.length!==3) continue;
+    var dateISO=dtParts[2]+'-'+dtParts[1]+'-'+dtParts[0]; // YYYY-MM-DD
+    var timeOfDay=timeStr.split(',')[1]?timeStr.split(',')[1].trim():'00:00';
+    // rest[0]=weight (e.g. "69.30kg"), rest[1]=BMI, rest[2]=body fat (e.g. "20.1%" or "--")
+    var weightRaw=(rest[0]||'').trim().replace('kg','');
+    var bfRaw=(rest[2]||'').trim().replace('%','');
+    var weight=parseFloat(weightRaw);
+    var bf=bfRaw==='--'||bfRaw===''?null:parseFloat(bfRaw);
+    if (isNaN(weight)) continue;
+    // Dedup: keep one entry per day — prefer entry with BF data; on tie, keep earliest time
+    if (!results[dateISO]) {
+      results[dateISO]={date:dateISO,weight:weight.toFixed(2),bodyFat:bf!==null?bf.toFixed(1):'',time:timeOfDay};
+    } else {
+      var existing=results[dateISO];
+      var existingHasBF=existing.bodyFat!=='';
+      var newHasBF=bf!==null;
+      // Replace if: new has BF and existing doesn't, OR same BF status but new time is earlier
+      var newEarlier=timeOfDay<existing.time;
+      if ((!existingHasBF&&newHasBF)||(existingHasBF===newHasBF&&newEarlier)) {
+        results[dateISO]={date:dateISO,weight:weight.toFixed(2),bodyFat:bf!==null?bf.toFixed(1):'',time:timeOfDay};
+      }
+    }
+  }
+  // Sort oldest→newest
+  return Object.values(results).sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+}
+
+function handleCSVImport(input) {
+  var file=input.files&&input.files[0];
+  if (!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e) {
+    var parsed=parseVeSyncCSV(e.target.result);
+    var s=getSettings();
+    var existingDates={};
+    (s.weightLog||[]).forEach(function(entry){ existingDates[entry.date]=true; });
+    _pendingImport=parsed.filter(function(entry){ return !existingDates[entry.date]; });
+    var skipped=parsed.length-_pendingImport.length;
+    var preview=document.getElementById('csv-import-preview');
+    if (!preview) return;
+    if (parsed.length===0) {
+      preview.innerHTML='<div style="margin-top:10px;padding:10px;background:var(--bg2);border-radius:8px;font-size:13px;color:var(--text2);">No valid rows found in this file. Make sure it is a VeSync export CSV.</div>';
+      input.value=''; return;
+    }
+    var withBF=_pendingImport.filter(function(e){ return e.bodyFat!==''; }).length;
+    var h='<div style="margin-top:12px;">';
+    h+='<div style="padding:10px 12px;background:var(--bg2);border-radius:8px;margin-bottom:10px;">';
+    h+='<div style="font-size:13px;font-weight:700;margin-bottom:4px;">Import summary</div>';
+    h+='<div style="font-size:13px;color:var(--text2);line-height:1.7;">';
+    h+='Readings in file: <strong style="color:var(--text);">'+parsed.length+'</strong><br>';
+    h+='New dates to add: <strong style="color:var(--accent);">'+_pendingImport.length+'</strong><br>';
+    if (skipped>0) h+='Already logged (skipped): <strong style="color:var(--text2);">'+skipped+'</strong><br>';
+    if (withBF>0) h+='New entries with body fat %: <strong style="color:var(--text);">'+withBF+'</strong>';
+    h+='</div></div>';
+    if (_pendingImport.length===0) {
+      h+='<div style="font-size:13px;color:var(--text2);text-align:center;padding:6px 0;">All dates already in your log — nothing to import.</div>';
+      h+='</div>';
+      preview.innerHTML=h; input.value=''; return;
+    }
+    // Import mode selector
+    h+='<div style="margin-bottom:10px;">';
+    h+='<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:6px;">What to import</div>';
+    h+='<div class="seg-btn">';
+    h+='<button id="import-mode-weight" class="seg-btn-opt '+(withBF>0?'active':'')+'" onclick="setImportMode(\'weight\')">Weight only</button>';
+    h+='<button id="import-mode-both" class="seg-btn-opt" onclick="setImportMode(\'both\')" '+(withBF===0?'disabled title="No body fat data in these entries"':'')+'>Weight + Body fat %</button>';
+    h+='</div>';
+    if (withBF>0) h+='<div style="font-size:11px;color:var(--text2);margin-top:5px;">Note: body fat % from bioelectrical impedance scales may be inaccurate — use with caution.</div>';
+    h+='</div>';
+    // Confirm button
+    h+='<button class="btn btn-primary btn-full" onclick="confirmCSVImport()">Import '+_pendingImport.length+' entr'+((_pendingImport.length===1)?'y':'ies')+'</button>';
+    h+='</div>';
+    _importMode='weight';
+    preview.innerHTML=h;
+    input.value='';
+  };
+  reader.readAsText(file);
+}
+
+function setImportMode(mode) {
+  _importMode=mode;
+  var bw=document.getElementById('import-mode-weight');
+  var bb=document.getElementById('import-mode-both');
+  if (bw) bw.classList.toggle('active',mode==='weight');
+  if (bb) bb.classList.toggle('active',mode==='both');
+}
+
+function confirmCSVImport() {
+  if (!_pendingImport||!_pendingImport.length) return;
+  var s=getSettings();
+  var log=s.weightLog||[];
+  var existingDates={};
+  log.forEach(function(entry){ existingDates[entry.date]=true; });
+  var added=0;
+  _pendingImport.forEach(function(entry) {
+    if (existingDates[entry.date]) return; // safety check
+    log.push({
+      date:entry.date,
+      weight:entry.weight,
+      bodyFat:_importMode==='both'?entry.bodyFat:''
+    });
+    added++;
+  });
+  // Sort newest-first
+  log.sort(function(a,b){ return a.date>b.date?-1:a.date<b.date?1:0; });
+  s.weightLog=log;
+  _pauseSettingsSync=true;
+  writeSettings(s);
+  _pauseSettingsSync=false;
+  debouncedSettingsSync();
+  _pendingImport=[];
+  showToast('Imported '+added+' entr'+(added===1?'y':'ies')+' ✓');
+  renderProgress();
 }
 
 // ─── ONBOARDING ───
