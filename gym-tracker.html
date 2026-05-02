@@ -1967,9 +1967,9 @@ function _processImportParsed(parsed) {
   }
   h+='<div style="margin-bottom:10px;">';
   h+='<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:6px;">What to import</div>';
-  h+='<div class="seg-btn">';
-  h+='<button id="import-mode-weight" class="seg-btn-opt active" onclick="setImportMode(\'weight\')">Weight only</button>';
-  h+='<button id="import-mode-both" class="seg-btn-opt" onclick="setImportMode(\'both\')" '+(withBF===0?'disabled title="No body fat data in these entries"':'')+'>Weight + Body fat %</button>';
+  h+='<div class="seg-row">';
+  h+='<button id="import-mode-weight" class="seg-btn active" onclick="setImportMode(\'weight\')">Weight only</button>';
+  h+='<button id="import-mode-both" class="seg-btn" onclick="setImportMode(\'both\')" '+(withBF===0?'disabled style="opacity:0.4;cursor:default;" title="No body fat data in these entries"':'')+'>Weight + Body fat %</button>';
   h+='</div>';
   if (withBF>0) h+='<div style="font-size:11px;color:var(--text2);margin-top:5px;">Note: body fat % from bioelectrical impedance scales may be inaccurate — use with caution.</div>';
   h+='</div>';
@@ -1993,8 +1993,8 @@ function setImportMode(mode) {
   _importMode=mode;
   var bw=document.getElementById('import-mode-weight');
   var bb=document.getElementById('import-mode-both');
-  if (bw) bw.classList.toggle('active',mode==='weight');
-  if (bb) bb.classList.toggle('active',mode==='both');
+  if (bw) { bw.classList.toggle('active', mode==='weight'); }
+  if (bb && !bb.disabled) { bb.classList.toggle('active', mode==='both'); }
 }
 
 function confirmCSVImport() {
