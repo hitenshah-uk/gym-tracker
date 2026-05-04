@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <title>Gym Tracker</title>
@@ -128,7 +128,7 @@
   .drum-fade::before, .drum-fade::after { content: ''; position: absolute; left: 10%; right: 10%; height: 1px; background: var(--border); }
   .drum-fade::before { top: calc(50% - 22px); }
   .drum-fade::after { top: calc(50% + 22px); }
-  .drum-scroll { height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+  .drum-scroll { height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; overscroll-behavior: contain; }
   .drum-scroll::-webkit-scrollbar { display: none; }
   .drum-pad { height: 44px; flex-shrink: 0; }
   .drum-item { height: 44px; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: var(--text); user-select: none; -webkit-user-select: none; }
@@ -195,7 +195,7 @@
   .empty { text-align: center; padding: 48px 24px; color: var(--text2); }
   .empty .icon { font-size: 48px; margin-bottom: 12px; }
   .empty p { font-size: 15px; }
-  .save-bar { position: sticky; bottom: 0; padding: 12px 0 4px; background: linear-gradient(transparent, var(--bg) 40%); margin-top: 8px; }
+  .save-bar { padding: 12px 0 4px; margin-top: 8px; }
 
   /* TOAST */
   #toast { position: fixed; bottom: calc(var(--nav-h) + var(--safe-bottom) + 12px); left: 50%; transform: translateX(-50%) translateY(20px); background: var(--text); color: var(--bg); padding: 10px 20px; border-radius: 20px; font-size: 14px; font-weight: 600; opacity: 0; transition: opacity 0.3s, transform 0.3s; pointer-events: none; z-index: 300; white-space: nowrap; }
@@ -322,7 +322,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.8.1';
+var APP_VERSION = '2.9.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -1139,16 +1139,14 @@ function renderLog() {
     var ca=logState.cardioActual||{};
     html += '<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);">'
       +'<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:8px;">Actual</div>'
+      +'<div id="cardio-equipment-section" style="margin-bottom:10px;">'+buildEquipmentHTML()+'</div>'
       +'<div style="display:flex;gap:8px;">'
-      +'<div style="flex:1;min-width:64px;"><label style="font-size:10px;margin-bottom:3px;">Duration</label>'
+      +'<div style="flex:1;"><label style="font-size:10px;margin-bottom:3px;">Duration</label>'
       +'<div style="display:flex;align-items:center;gap:4px;">'
       +'<input type="number" inputmode="numeric" min="0" value="'+esc(ca.duration||'')+'" oninput="updateCardioActual(\'duration\',this.value)" placeholder="—" style="font-size:14px;padding:6px 6px;text-align:center;">'
       +'<span style="font-size:11px;color:var(--text2);font-weight:600;white-space:nowrap;">min</span>'
       +'</div></div>'
-      +'<div style="flex:2;"><label style="font-size:10px;margin-bottom:3px;">Equipment</label>'
-      +'<input type="text" value="'+esc(ca.machine||'')+'" oninput="updateCardioActual(\'machine\',this.value)" placeholder="Treadmill, bike…" style="font-size:13px;padding:6px 8px;text-align:left;">'
-      +'</div>'
-      +'<div style="flex:1;min-width:64px;"><label style="font-size:10px;margin-bottom:3px;">Avg HR</label>'
+      +'<div style="flex:1;"><label style="font-size:10px;margin-bottom:3px;">Avg HR</label>'
       +'<div style="display:flex;align-items:center;gap:4px;">'
       +'<input type="number" inputmode="numeric" min="40" max="220" value="'+esc(ca.avgHR||'')+'" oninput="updateCardioActual(\'avgHR\',this.value)" placeholder="—" style="font-size:14px;padding:6px 6px;text-align:center;">'
       +'<span style="font-size:11px;color:var(--text2);font-weight:600;white-space:nowrap;">BPM</span>'
@@ -1232,6 +1230,7 @@ function renderLog() {
 function selectDay(day) {
   var plan=getPlan(); if(plan[day].rest){showToast('Rest day — no exercises');return;}
   logState.selectedDay=day; logState.cardioDone=false; logState.cardioActual={}; logState.startedAt=null; logState.injuryModified=false; logState.isDeload=false;
+  _cardioOtherMode=false;
   dismissRestTimer();
   logState.exercises=plan[day].exercises.map(function(name){ var ls=getLastSets(name); return {name:name,sets:[{weight:defaultWeight(ls,0),reps:defaultReps(ls,0),note:'',rpe:null,done:false}]}; });
   renderLog();
@@ -1251,6 +1250,32 @@ function addSet(ei) { var prev=logState.exercises[ei].sets[logState.exercises[ei
 function removeLastSet(ei) { if(logState.exercises[ei].sets.length<=1){showToast('Need at least one set');return;} logState.exercises[ei].sets.pop(); renderLog(); }
 function updateNote(ei,si,val) { logState.exercises[ei].sets[si].note=val; }
 function updateRPE(ei,si,val) { var n=parseInt(val); logState.exercises[ei].sets[si].rpe=(n>=1&&n<=10)?n:null; }
+var CARDIO_EQUIPMENT = ['Elliptical','Treadmill','Bike'];
+var _cardioOtherMode = false;
+function buildEquipmentHTML() {
+  var machine=(logState.cardioActual&&logState.cardioActual.machine)||'';
+  var isPreset=CARDIO_EQUIPMENT.indexOf(machine)!==-1;
+  var isOtherMode=_cardioOtherMode||(machine!==''&&!isPreset);
+  var h='<label style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);display:block;margin-bottom:5px;">Equipment</label>';
+  h+='<div class="seg-row">';
+  CARDIO_EQUIPMENT.forEach(function(eq){
+    h+='<button class="seg-btn'+(machine===eq?' active':'')+'" onclick="setCardioMachine(\''+eq+'\')">'+eq+'</button>';
+  });
+  h+='<button class="seg-btn'+(isOtherMode?' active':'')+'" onclick="setCardioMachine(\'other\')">Other</button>';
+  h+='</div>';
+  if (isOtherMode) {
+    var textVal=isPreset?'':machine;
+    h+='<input type="text" value="'+esc(textVal)+'" placeholder="Equipment name…" oninput="updateCardioActual(\'machine\',this.value)" style="font-size:13px;padding:6px 8px;text-align:left;margin-top:6px;">';
+  }
+  return h;
+}
+function setCardioMachine(val) {
+  if (!logState.cardioActual) logState.cardioActual={};
+  if (val==='other') { _cardioOtherMode=true; logState.cardioActual.machine=''; }
+  else { _cardioOtherMode=false; logState.cardioActual.machine=val; }
+  var el=document.getElementById('cardio-equipment-section');
+  if (el) el.innerHTML=buildEquipmentHTML();
+}
 function updateCardioActual(field,val) { if(!logState.cardioActual) logState.cardioActual={}; logState.cardioActual[field]=val; }
 function removeLogEx(ei) { logState.exercises.splice(ei,1); renderLog(); }
 function moveLogExUp(ei) { if(ei<=0)return; var tmp=logState.exercises[ei];logState.exercises[ei]=logState.exercises[ei-1];logState.exercises[ei-1]=tmp; renderLog(); }
@@ -1413,7 +1438,7 @@ function renderSparkline(vals, color) {
 }
 
 // ─── HISTORY SCREEN ───
-var hOpen={}, hFilter='all', hSearch='', hKeyLifts=false;
+var hOpen={}, hFilter='all', hSearch='', hKeyLifts=false, _hDeleteConfirmId=null;
 function renderHistory() {
   var c=document.getElementById('history-content');
   var sessions=getAllSessions().slice().reverse();
@@ -1501,14 +1526,35 @@ function renderHistory() {
         html+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:13px;color:var(--text2);">'
           +'<span style="font-weight:700;color:var(--text);">Cardio: </span>'+caVals.join(' &nbsp;·&nbsp; ')+'</div>';
       }
+      // Delete session
+      if (_hDeleteConfirmId===s.id) {
+        html+='<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);">'
+          +'<div style="font-size:13px;color:var(--col-lower);font-weight:600;margin-bottom:8px;">Delete this session? This cannot be undone.</div>'
+          +'<div style="display:flex;gap:8px;">'
+          +'<button class="btn" style="flex:1;height:40px;font-size:13px;background:var(--col-lower);color:#fff;" onclick="event.stopPropagation();confirmDeleteSession('+s.id+')">Yes, delete</button>'
+          +'<button class="btn btn-secondary" style="flex:1;height:40px;font-size:13px;" onclick="event.stopPropagation();cancelDeleteSession()">Cancel</button>'
+          +'</div></div>';
+      } else {
+        html+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);text-align:right;">'
+          +'<button onclick="event.stopPropagation();requestDeleteSession('+s.id+')" style="background:none;border:none;color:var(--col-lower);font-size:13px;font-weight:600;cursor:pointer;padding:4px 8px;">🗑 Delete session</button>'
+          +'</div>';
+      }
       html += '</div>';
     }
     html += '</div>';
   });
   c.innerHTML = html;
 }
-function toggleH(id) { hOpen[id]=!hOpen[id]; renderHistory(); }
+function toggleH(id) { _hDeleteConfirmId=null; hOpen[id]=!hOpen[id]; renderHistory(); }
 function setFilter(day) { hFilter=day; renderHistory(); }
+function requestDeleteSession(id) { _hDeleteConfirmId=id; renderHistory(); }
+function cancelDeleteSession() { _hDeleteConfirmId=null; renderHistory(); }
+function confirmDeleteSession(id) {
+  var sessions=getAllSessions().filter(function(s){ return s.id!==id; });
+  lsSet('gymSessions',JSON.stringify(sessions));
+  _hDeleteConfirmId=null; hOpen[id]=false;
+  renderHistory(); syncToGitHub(false); showToast('Session deleted');
+}
 
 // ─── SETTINGS SCREEN ───
 function buildSettingsCalcsHTML() {
@@ -1742,7 +1788,9 @@ function deleteWeightEntry(idx) {
 }
 
 var _chartRange='all';
+var _wlExpanded=false;
 function setChartRange(r){ _chartRange=r; renderProgress(); }
+function toggleWLExpand(){ _wlExpanded=!_wlExpanded; renderProgress(); }
 function _filterChartData(data) {
   if (_chartRange==='all') return data;
   var cutoff=new Date();
@@ -1846,8 +1894,11 @@ function drawBodyChart(canvasId, data, color, targetVal, targetLabel, unit) {
 
 function buildWeightLogList(log) {
   if (!log||log.length===0) return '<div style="text-align:center;padding:16px;color:var(--text2);font-size:13px;">No entries yet — add your first entry above.</div>';
+  var PREVIEW=3;
+  var showAll=_wlExpanded||log.length<=PREVIEW;
+  var visible=showAll?log:log.slice(0,PREVIEW);
   var h='<div style="margin-top:8px;">';
-  log.forEach(function(e,i){
+  visible.forEach(function(e,i){
     var vals=[];
     if (e.weight) vals.push(e.weight+'kg');
     if (e.bodyFat) vals.push(e.bodyFat+'% BF');
@@ -1856,6 +1907,10 @@ function buildWeightLogList(log) {
       +'<button class="btn-icon" onclick="deleteWeightEntry('+i+')" style="color:var(--col-lower);background:var(--col-lower-bg);border:none;flex-shrink:0;">✕</button>'
       +'</div>';
   });
+  if (log.length>PREVIEW) {
+    h+='<button onclick="toggleWLExpand()" style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;padding:10px 0;width:100%;text-align:center;">'
+      +(showAll?'Show less ▴':'Show all '+log.length+' entries ▾')+'</button>';
+  }
   return h+'</div>';
 }
 
