@@ -2196,7 +2196,8 @@ function renderHelp() {
     {label:'Starting a session', text:'Tap the day chip at the top to select today\'s session. The exercises from your plan load automatically with last-session values pre-filled.'},
     {label:'Logging sets', text:'Scroll the weight and reps drums to your values, then tap ✓ to mark the set done. A 90-second rest timer starts automatically after each set.'},
     {label:'Notes and RPE', text:'Each set has an optional note field and an RPE (Rate of Perceived Exertion) field. RPE runs 1–10: 7–8 is a challenging working set, 10 is absolute maximum effort.'},
-    {label:'Cardio logging', text:'If your day includes cardio, a box appears below the day header. Fill in actual duration, equipment, and average HR, then tick ✓ when complete.'},
+    {label:'Cardio logging', text:'If your day includes cardio, a box appears below the day header. Tap Elliptical, Treadmill, or Bike to log your equipment in one tap — or choose Other to type a custom name. Fill in actual duration and average HR, then tick ✓ when complete.'},
+    {label:'Saving a session', text:'Scroll to the bottom of the log and tap Save Session. The button sits at the bottom of the page so you have to scroll past your exercises to reach it — this prevents accidental saves.'},
     {label:'Session flags', text:'Before saving, you can flag the session as ⚠ Modified (injury/limitation) or 🔄 Deload. Flagged sessions are excluded from your progress sparklines.'}
   ]);
   html+=hs('⏱ Timer tab',[
@@ -2206,13 +2207,15 @@ function renderHelp() {
   ]);
   html+=hs('📊 History tab',[
     {label:'Browsing sessions', text:'Sessions appear in reverse chronological order. Tap any card to expand it and see full set details including weight, reps, notes, and RPE.'},
+    {label:'Deleting a session', text:'Expand a session and tap 🗑 Delete session at the bottom. A confirmation step appears — tap Yes, delete to confirm, or Cancel to go back. The deletion syncs to GitHub automatically.'},
     {label:'Filters', text:'Filter by day type or use the ⭐ Key lifts chip to show only key lift exercises across all expanded sessions.'},
     {label:'Progress sparklines', text:'Each exercise in a session shows a small chart of your last 8 clean sessions (excluding modified and deload). Shows last weight, peak, and trend direction.'},
     {label:'Export', text:'Use Export CSV or Export JSON at the top of History to download your full session data — useful for analysis in Claude or Excel.'}
   ]);
   html+=hs('📈 Progress screen',[
     {label:'Accessing it', text:'Tap "📈 Body Composition & Measurements" in Settings to open the Progress screen.'},
-    {label:'Weight and body fat log', text:'Add dated entries for your weight (kg) and body fat %. Each entry appears as a data point on the trend charts. Targets are 67kg and 25% body fat.'},
+    {label:'Weight and body fat log', text:'Add dated entries for your weight (kg) and body fat %. Each entry appears as a data point on the trend charts. Targets are 67kg and 25% body fat. The log shows your 3 most recent entries by default — tap "Show all" to see the full history.'},
+    {label:'VeSync import', text:'Export a CSV from the VeSync app and import it here. Only new dates are added — existing entries are never overwritten.'},
     {label:'Body measurements', text:'Log waist, chest, arms, and thigh measurements with dates. More reliable than weight alone for tracking body recomposition.'}
   ]);
   html+=hs('⚙️ Settings',[
