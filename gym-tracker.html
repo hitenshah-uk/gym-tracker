@@ -17,6 +17,7 @@
     --col-full: #7c3aed;  --col-full-bg: #ede9fe;
     --col-rest: #9ca3af;  --col-rest-bg: #f3f4f6;
     --col-done: #16a34a;  --col-done-bg: #dcfce7;
+    --col-build: #0891b2; --col-build-bg: #cffafe;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -28,6 +29,7 @@
       --col-full: #a78bfa;  --col-full-bg: #2e1065;
       --col-rest: #6b7280;  --col-rest-bg: #1f2937;
       --col-done: #4ade80;  --col-done-bg: #0f2a18;
+      --col-build: #22d3ee; --col-build-bg: #164e63;
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
@@ -322,7 +324,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.9.0';
+var APP_VERSION = '2.9.1';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -2486,7 +2488,7 @@ function renderTimerRunning(c) {
   var phases = {
     warmup:      {label:'WARM UP',     bg:'var(--col-rest-bg)',  color:'#9ca3af',  hcolor:'var(--col-rest)',  zone:'Zone 1–2', z1:0,z2:1},
     build_ready: {label:'GET READY',   bg:'var(--col-full-bg)',  color:'#7c3aed',  hcolor:'var(--col-full)',  zone:'',         z1:-1,z2:-1},
-    build:       {label:'BUILD',        bg:'#e0f2fe',             color:'#0284c7',  hcolor:'#0284c7',          zone:'Zone 2–3', z1:1,z2:2},
+    build:       {label:'BUILD',        bg:'var(--col-build-bg)', color:'var(--col-build)', hcolor:'var(--col-build)', zone:'Zone 2–3', z1:1,z2:2},
     get_ready:   {label:'GET READY',   bg:'var(--col-full-bg)',  color:'#7c3aed',  hcolor:'var(--col-full)',  zone:'',         z1:-1,z2:-1},
     work:        {label:'WORK',         bg:'var(--col-pull-bg)',  color:'#16a34a',  hcolor:'var(--col-pull)',  zone:'Zone 4',   z1:3,z2:3},
     rest:        {label:'RECOVER',      bg:'var(--col-lower-bg)', color:'#ea580c',  hcolor:'var(--col-lower)', zone:'Zone 1–2', z1:0,z2:1},
