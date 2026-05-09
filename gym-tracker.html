@@ -292,6 +292,7 @@
     </button>
   </nav>
 </div>
+<div id="rest-timer-float" style="display:none;"></div>
 <div id="toast"></div>
 
 <div id="onboarding-overlay">
@@ -324,7 +325,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.9.1';
+var APP_VERSION = '2.10.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -791,7 +792,7 @@ function getLastSets(name) {
 function getSettings() {
   var s = lsGet('gymSettings');
   if (s) { try { return JSON.parse(s); } catch(e) {} }
-  return { age:'', heightCm:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, activityLevel:1.55, measurements:[], weightLog:[], githubToken:'', rmWeight:'', rmReps:'' };
+  return { age:'', heightCm:'', sex:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, activityLevel:1.55, measurements:[], weightLog:[], githubToken:'', rmWeight:'', rmReps:'' };
 }
 var _pauseSettingsSync=false;
 function writeSettings(s) { lsSet('gymSettings', JSON.stringify(s)); if(!_pauseSettingsSync) debouncedSettingsSync(); }
@@ -1382,19 +1383,25 @@ function dismissRestTimer(){
   restTimer.intervalId=null; restTimer.active=false; updateRestTimerDisplay();
 }
 function updateRestTimerDisplay(){
-  var el=document.getElementById('rest-timer-bar'); if(!el) return;
-  if(!restTimer.active){ el.style.cssText=''; el.innerHTML=''; return; }
+  var el=document.getElementById('rest-timer-bar');
+  var fl=document.getElementById('rest-timer-float');
+  if(!restTimer.active){
+    if(el){ el.style.cssText=''; el.innerHTML=''; }
+    if(fl){ fl.style.cssText='display:none;'; fl.innerHTML=''; }
+    return;
+  }
   var t=logState.selectedDay?th(logState.selectedDay):{color:'var(--col-rest)',bg:'var(--col-rest-bg)'};
   var pct=Math.round(restTimer.secondsLeft/restTimer.duration*100);
   var s=restTimer.secondsLeft;
   var timeStr=s>=60?Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60:s+'s';
-  el.style.cssText='display:flex;align-items:center;gap:12px;background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;margin-bottom:14px;';
-  el.innerHTML='<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:'+t.color+';flex-shrink:0;">Rest</div>'
+  var inner='<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:'+t.color+';flex-shrink:0;">Rest</div>'
     +'<div style="flex:1;"><div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden;">'
     +'<div style="height:100%;border-radius:3px;background:'+t.color+';width:'+pct+'%;transition:width 0.9s linear;"></div>'
     +'</div></div>'
     +'<div style="font-size:20px;font-weight:900;color:'+t.color+';font-variant-numeric:tabular-nums;flex-shrink:0;min-width:40px;text-align:right;">'+timeStr+'</div>'
     +'<button onclick="dismissRestTimer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);flex-shrink:0;">Skip</button>';
+  if(el){ el.style.cssText='display:flex;align-items:center;gap:12px;background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;margin-bottom:14px;'; el.innerHTML=inner; }
+  if(fl){ fl.style.cssText='display:flex;align-items:center;gap:12px;background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;position:fixed;bottom:calc(var(--nav-h) + var(--safe-bottom) + 8px);left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:568px;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.25);'; fl.innerHTML=inner; }
 }
 function playRestBeep(){
   try {
@@ -1638,10 +1645,18 @@ function renderSettings() {
 
   // Personal Stats
   html += '<div class="settings-section-title">Personal Stats</div>';
-  html += '<div class="card"><div class="stats-grid">'
+  html += '<div class="card">'
+    +'<div class="stats-grid">'
     +'<div><label>Age (years)</label><input type="number" inputmode="numeric" min="10" max="100" value="'+esc(s.age)+'" oninput="updateSetting(\'age\',this.value)" placeholder="—"></div>'
     +'<div><label>Height (cm)</label><input type="number" inputmode="decimal" min="100" max="250" value="'+esc(s.heightCm)+'" oninput="updateSetting(\'heightCm\',this.value)" placeholder="—"></div>'
-    +'</div></div>';
+    +'</div>'
+    +'<div style="margin-top:12px;"><label style="margin-bottom:8px;">Biological Sex</label>'
+    +'<div class="seg-row">'
+    +'<button class="seg-btn'+(s.sex==='male'?' active':'')+'" onclick="updateSetting(\'sex\',\'male\');renderSettings();">Male</button>'
+    +'<button class="seg-btn'+(s.sex==='female'?' active':'')+'" onclick="updateSetting(\'sex\',\'female\');renderSettings();">Female</button>'
+    +'<button class="seg-btn'+(!s.sex?' active':'')+'" onclick="updateSetting(\'sex\',\'\');renderSettings();">Not set</button>'
+    +'</div></div>'
+    +'</div>';
 
   // Calculated Metrics
   html += '<div class="settings-section-title">Your Metrics</div>';
@@ -1737,15 +1752,32 @@ function update1RM(newW, newR) {
 
 function buildMeasurementsList(measurements) {
   if (!measurements||measurements.length===0) return '<div style="text-align:center;padding:16px;color:var(--text2);font-size:13px;">No measurements logged yet.</div>';
+  var sex=(getSettings().sex)||'';
   var h = '<div style="margin-top:12px;">';
   measurements.forEach(function(m,i) {
     var vals = [];
     if (m.waist)  vals.push('Waist: '+m.waist+'cm');
+    if (m.hips)   vals.push('Hips: '+m.hips+'cm');
     if (m.chest)  vals.push('Chest: '+m.chest+'cm');
     if (m.arms)   vals.push('Arms: '+m.arms+'cm');
     if (m.thighs) vals.push('Thighs: '+m.thighs+'cm');
+    var ratioHtml='';
+    if (m.waist&&m.hips) {
+      var ratio=(parseFloat(m.waist)/parseFloat(m.hips)).toFixed(2);
+      var rLabel='', rColor='var(--text2)';
+      if (sex==='male') {
+        if (parseFloat(ratio)<0.9) { rLabel='Healthy'; rColor='var(--col-pull)'; }
+        else if (parseFloat(ratio)<=1.0) { rLabel='At risk'; rColor='var(--col-lower)'; }
+        else { rLabel='High risk'; rColor='#dc2626'; }
+      } else if (sex==='female') {
+        if (parseFloat(ratio)<0.8) { rLabel='Healthy'; rColor='var(--col-pull)'; }
+        else if (parseFloat(ratio)<=0.9) { rLabel='At risk'; rColor='var(--col-lower)'; }
+        else { rLabel='High risk'; rColor='#dc2626'; }
+      }
+      ratioHtml='<div style="margin-top:4px;font-size:12px;color:var(--text2);">WHR: <strong style="color:var(--text);">'+ratio+'</strong>'+(rLabel?' <span style="color:'+rColor+';font-weight:700;">'+rLabel+'</span>':'')+'</div>';
+    }
     h += '<div class="measurement-entry">'
-      +'<div><div class="measurement-date">'+esc(m.date)+'</div><div class="measurement-vals">'+esc(vals.join(' · '))+'</div></div>'
+      +'<div><div class="measurement-date">'+esc(m.date)+'</div><div class="measurement-vals">'+esc(vals.join(' · '))+'</div>'+ratioHtml+'</div>'
       +'<button class="btn-icon" onclick="deleteMeasurement('+i+')" style="color:var(--col-lower);background:var(--col-lower-bg);border:none;flex-shrink:0;">✕</button>'
       +'</div>';
   });
@@ -1753,14 +1785,14 @@ function buildMeasurementsList(measurements) {
 }
 
 function addMeasurement() {
-  var date=document.getElementById('m-date'), waist=document.getElementById('m-waist'), chest=document.getElementById('m-chest'), arms=document.getElementById('m-arms'), thighs=document.getElementById('m-thighs');
-  if (!waist.value&&!chest.value&&!arms.value&&!thighs.value) { showToast('Enter at least one measurement'); return; }
+  var date=document.getElementById('m-date'), waist=document.getElementById('m-waist'), hips=document.getElementById('m-hips'), chest=document.getElementById('m-chest'), arms=document.getElementById('m-arms'), thighs=document.getElementById('m-thighs');
+  if (!waist.value&&!hips.value&&!chest.value&&!arms.value&&!thighs.value) { showToast('Enter at least one measurement'); return; }
   var s=getSettings();
-  s.measurements.unshift({ date:date.value||new Date().toISOString().split('T')[0], waist:waist.value, chest:chest.value, arms:arms.value, thighs:thighs.value });
+  s.measurements.unshift({ date:date.value||new Date().toISOString().split('T')[0], waist:waist.value, hips:hips.value, chest:chest.value, arms:arms.value, thighs:thighs.value });
   writeSettings(s);
   var el=document.getElementById('measurements-list');
   if (el) el.innerHTML=buildMeasurementsList(s.measurements);
-  waist.value=''; chest.value=''; arms.value=''; thighs.value='';
+  waist.value=''; hips.value=''; chest.value=''; arms.value=''; thighs.value='';
   showToast('Measurement saved ✓');
 }
 
@@ -1981,6 +2013,7 @@ function renderProgress() {
     +'<div class="m-grid">'
     +'<div><label>Date</label><input type="date" id="m-date" value="'+todayISO()+'" style="text-align:left;"></div>'
     +'<div><label>Waist (cm)</label><input type="number" id="m-waist" inputmode="decimal" step="0.1" placeholder="—"></div>'
+    +'<div><label>Hips (cm)</label><input type="number" id="m-hips" inputmode="decimal" step="0.1" placeholder="—"></div>'
     +'<div><label>Chest (cm)</label><input type="number" id="m-chest" inputmode="decimal" step="0.1" placeholder="—"></div>'
     +'<div><label>Arms (cm)</label><input type="number" id="m-arms" inputmode="decimal" step="0.1" placeholder="—"></div>'
     +'<div><label>Thighs (cm)</label><input type="number" id="m-thighs" inputmode="decimal" step="0.1" placeholder="—"></div>'
@@ -2218,7 +2251,7 @@ function renderHelp() {
     {label:'Accessing it', text:'Tap "📈 Body Composition & Measurements" in Settings to open the Progress screen.'},
     {label:'Weight and body fat log', text:'Add dated entries for your weight (kg) and body fat %. Each entry appears as a data point on the trend charts. Targets are 67kg and 25% body fat. The log shows your 3 most recent entries by default — tap "Show all" to see the full history.'},
     {label:'VeSync import', text:'Export a CSV from the VeSync app and import it here. Only new dates are added — existing entries are never overwritten.'},
-    {label:'Body measurements', text:'Log waist, chest, arms, and thigh measurements with dates. More reliable than weight alone for tracking body recomposition.'}
+    {label:'Body measurements', text:'Log waist, hips, chest, arms, and thigh measurements with dates. Waist-to-hip ratio (WHR) is calculated automatically when both waist and hips are entered. Set your Biological Sex in Settings to see a Healthy / At risk / High risk label alongside the ratio. More reliable than weight alone for tracking body recomposition.'}
   ]);
   html+=hs('⚙️ Settings',[
     {label:'Personal stats', text:'Enter your age and height for personalised metrics: BMI, max heart rate, BMR, TDEE, and heart rate zones. These feed into the Log and Timer screens.'},
