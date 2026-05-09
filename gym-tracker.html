@@ -325,7 +325,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.10.0';
+var APP_VERSION = '2.10.1';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -1004,14 +1004,15 @@ function renderPlan() {
         });
         h += '</div>';
         // Cardio config fields
+        var c2;
         if (d.cardioType === 'intervals') {
-          var c2 = d.cardioConfig||{};
+          c2 = d.cardioConfig||{};
           var fields = [['warmUp','Warm up','min'],['work','Work','sec'],['rest','Rest','sec'],['rounds','Rounds',''],['coolDown','Cool down','min']];
           fields.forEach(function(f) {
             h += '<div class="cardio-field-row"><label>'+f[1]+'</label><input type="number" inputmode="numeric" min="0" value="'+(c2[f[0]]||'')+'" oninput="updateCardioConfig(\''+day+'\',\''+f[0]+'\',this.value)"><span class="cardio-field-unit">'+f[2]+'</span></div>';
           });
         } else if (d.cardioType === 'steady') {
-          var c2 = d.cardioConfig||{};
+          c2 = d.cardioConfig||{};
           var fields = [['warmUp','Warm up','min'],['duration','Duration','min'],['coolDown','Cool down','min']];
           fields.forEach(function(f) {
             h += '<div class="cardio-field-row"><label>'+f[1]+'</label><input type="number" inputmode="numeric" min="0" value="'+(c2[f[0]]||'')+'" oninput="updateCardioConfig(\''+day+'\',\''+f[0]+'\',this.value)"><span class="cardio-field-unit">'+f[2]+'</span></div>';
@@ -1075,7 +1076,6 @@ function setCardioType(day,type) {
 function updateCardioConfig(day,field,val) { var p=getPlan();if(!p[day].cardioConfig)p[day].cardioConfig={};p[day].cardioConfig[field]=parseFloat(val)||0;writePlan(p); }
 function updateEx(day,idx,val) { var p=getPlan();p[day].exercises[idx]=val;writePlan(p); }
 function removeEx(day,idx) { var p=getPlan();p[day].exercises.splice(idx,1);writePlan(p);planEdit[day]=true;renderPlan(); }
-function addEx(day) { var inp=document.getElementById('newex-'+day);var val=inp.value.trim();if(!val)return;var p=getPlan();p[day].exercises.push(val);writePlan(p);inp.value='';planEdit[day]=true;renderPlan(); }
 function moveExUp(day,idx) { var p=getPlan();if(idx<=0)return;var tmp=p[day].exercises[idx];p[day].exercises[idx]=p[day].exercises[idx-1];p[day].exercises[idx-1]=tmp;writePlan(p);planEdit[day]=true;renderPlan(); }
 function moveExDown(day,idx) { var p=getPlan();if(idx>=p[day].exercises.length-1)return;var tmp=p[day].exercises[idx];p[day].exercises[idx]=p[day].exercises[idx+1];p[day].exercises[idx+1]=tmp;writePlan(p);planEdit[day]=true;renderPlan(); }
 function copyDayFrom(targetDay,sourceDay) {
@@ -1283,13 +1283,6 @@ function updateCardioActual(field,val) { if(!logState.cardioActual) logState.car
 function removeLogEx(ei) { logState.exercises.splice(ei,1); renderLog(); }
 function moveLogExUp(ei) { if(ei<=0)return; var tmp=logState.exercises[ei];logState.exercises[ei]=logState.exercises[ei-1];logState.exercises[ei-1]=tmp; renderLog(); }
 function moveLogExDown(ei) { if(ei>=logState.exercises.length-1)return; var tmp=logState.exercises[ei];logState.exercises[ei]=logState.exercises[ei+1];logState.exercises[ei+1]=tmp; renderLog(); }
-function addCustomEx() {
-  var inp=document.getElementById('customex');if(!inp)return;
-  var val=inp.value.trim();if(!val)return;
-  var ls=getLastSets(val);
-  logState.exercises.push({name:val,sets:[{weight:defaultWeight(ls,0),reps:defaultReps(ls,0),note:'',rpe:null,done:false}]});
-  inp.value=''; renderLog();
-}
 function doSaveSession() {
   if(!logState.selectedDay){showToast('No day selected');return;}
   var plan=getPlan(),sd=plan[logState.selectedDay];
@@ -1719,7 +1712,7 @@ function renderSettings() {
     +'<label>Personal Access Token</label>'
     +'<div class="github-token-wrap">'
     +'<input type="password" id="github-token-input" value="'+esc(s.githubToken)+'" placeholder="ghp_xxxxxxxxxxxx" oninput="updateSetting(\'githubToken\',this.value)" style="text-align:left;">'
-    +'<button class="token-toggle" onclick="toggleTokenVisibility()">Show</button>'
+    +'<button class="token-toggle" onclick="toggleTokenVisibility(this)">Show</button>'
     +'</div>'
     +'<div style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">'
     +'<div style="display:flex;align-items:center;gap:8px;">'
@@ -1762,7 +1755,7 @@ function buildMeasurementsList(measurements) {
     if (m.arms)   vals.push('Arms: '+m.arms+'cm');
     if (m.thighs) vals.push('Thighs: '+m.thighs+'cm');
     var ratioHtml='';
-    if (m.waist&&m.hips) {
+    if (parseFloat(m.waist)>0 && parseFloat(m.hips)>0) {
       var ratio=(parseFloat(m.waist)/parseFloat(m.hips)).toFixed(2);
       var rLabel='', rColor='var(--text2)';
       if (sex==='male') {
@@ -1788,6 +1781,7 @@ function addMeasurement() {
   var date=document.getElementById('m-date'), waist=document.getElementById('m-waist'), hips=document.getElementById('m-hips'), chest=document.getElementById('m-chest'), arms=document.getElementById('m-arms'), thighs=document.getElementById('m-thighs');
   if (!waist.value&&!hips.value&&!chest.value&&!arms.value&&!thighs.value) { showToast('Enter at least one measurement'); return; }
   var s=getSettings();
+  if (!s.measurements) s.measurements = [];
   s.measurements.unshift({ date:date.value||new Date().toISOString().split('T')[0], waist:waist.value, hips:hips.value, chest:chest.value, arms:arms.value, thighs:thighs.value });
   writeSettings(s);
   var el=document.getElementById('measurements-list');
@@ -2086,12 +2080,12 @@ function _processImportParsed(parsed) {
   var preview=document.getElementById('csv-import-preview');
   if (!preview) return;
   if (parsed.length===0) {
-    preview.innerHTML='<div style="margin-top:10px;padding:10px;background:var(--bg2);border-radius:8px;font-size:13px;color:var(--text2);">No valid rows found. Make sure this is a VeSync export CSV.</div>';
+    preview.innerHTML='<div style="margin-top:10px;padding:10px;background:var(--surface2);border-radius:8px;font-size:13px;color:var(--text2);">No valid rows found. Make sure this is a VeSync export CSV.</div>';
     return;
   }
   var withBF=_pendingImport.filter(function(e){ return e.bodyFat!==''; }).length;
   var h='<div style="margin-top:12px;">';
-  h+='<div style="padding:10px 12px;background:var(--bg2);border-radius:8px;margin-bottom:10px;">';
+  h+='<div style="padding:10px 12px;background:var(--surface2);border-radius:8px;margin-bottom:10px;">';
   h+='<div style="font-size:13px;font-weight:700;margin-bottom:4px;">Import summary</div>';
   h+='<div style="font-size:13px;color:var(--text2);line-height:1.7;">';
   h+='Readings in file: <strong style="color:var(--text);">'+parsed.length+'</strong><br>';
@@ -2282,16 +2276,12 @@ function renderHelp() {
 function updateDrumIncrement(val) {
   var s=getSettings(); s.drumIncrement=parseFloat(val); writeSettings(s);
   buildWeightVals();
-  // re-render drum increment buttons
-  [1,2.5,5].forEach(function(v) {
-    var btns = document.querySelectorAll('.seg-btn');
-    btns.forEach(function(b) { if (parseFloat(b.textContent)===v) b.classList.toggle('active', v===val); });
-  });
+  renderSettings();
   showToast('Drum increment set to '+val+'kg');
 }
 
-function toggleTokenVisibility() {
-  var inp=document.getElementById('github-token-input'), btn=event.target;
+function toggleTokenVisibility(btn) {
+  var inp=document.getElementById('github-token-input');
   if (!inp) return;
   inp.type = inp.type==='password'?'text':'password';
   btn.textContent = inp.type==='password'?'Show':'Hide';
@@ -2519,14 +2509,14 @@ function renderTimerRunning(c) {
   var m=Math.floor(secs/60), s=secs%60;
   var timeStr = m>0 ? m+':'+(s<10?'0':'')+s : s+'s';
   var phases = {
-    warmup:      {label:'WARM UP',     bg:'var(--col-rest-bg)',  color:'#9ca3af',  hcolor:'var(--col-rest)',  zone:'Zone 1–2', z1:0,z2:1},
-    build_ready: {label:'GET READY',   bg:'var(--col-full-bg)',  color:'#7c3aed',  hcolor:'var(--col-full)',  zone:'',         z1:-1,z2:-1},
+    warmup:      {label:'WARM UP',     bg:'var(--col-rest-bg)',  color:'var(--col-rest)',  hcolor:'var(--col-rest)',  zone:'Zone 1–2', z1:0,z2:1},
+    build_ready: {label:'GET READY',   bg:'var(--col-full-bg)',  color:'var(--col-full)',  hcolor:'var(--col-full)',  zone:'',         z1:-1,z2:-1},
     build:       {label:'BUILD',        bg:'var(--col-build-bg)', color:'var(--col-build)', hcolor:'var(--col-build)', zone:'Zone 2–3', z1:1,z2:2},
-    get_ready:   {label:'GET READY',   bg:'var(--col-full-bg)',  color:'#7c3aed',  hcolor:'var(--col-full)',  zone:'',         z1:-1,z2:-1},
-    work:        {label:'WORK',         bg:'var(--col-pull-bg)',  color:'#16a34a',  hcolor:'var(--col-pull)',  zone:'Zone 4',   z1:3,z2:3},
-    rest:        {label:'RECOVER',      bg:'var(--col-lower-bg)', color:'#ea580c',  hcolor:'var(--col-lower)', zone:'Zone 1–2', z1:0,z2:1},
-    cooldown:    {label:'COOL DOWN',   bg:'var(--col-rest-bg)',  color:'#9ca3af',  hcolor:'var(--col-rest)',  zone:'Zone 1',   z1:0,z2:0},
-    steady:      {label:'STEADY STATE', bg:'var(--col-push-bg)', color:'#2563eb',  hcolor:'var(--col-push)',  zone:'Zone 2–3', z1:1,z2:2}
+    get_ready:   {label:'GET READY',   bg:'var(--col-full-bg)',  color:'var(--col-full)',  hcolor:'var(--col-full)',  zone:'',         z1:-1,z2:-1},
+    work:        {label:'WORK',         bg:'var(--col-pull-bg)',  color:'var(--col-pull)',  hcolor:'var(--col-pull)',  zone:'Zone 4',   z1:3,z2:3},
+    rest:        {label:'RECOVER',      bg:'var(--col-lower-bg)', color:'var(--col-lower)', hcolor:'var(--col-lower)', zone:'Zone 1–2', z1:0,z2:1},
+    cooldown:    {label:'COOL DOWN',   bg:'var(--col-rest-bg)',  color:'var(--col-rest)',  hcolor:'var(--col-rest)',  zone:'Zone 1',   z1:0,z2:0},
+    steady:      {label:'STEADY STATE', bg:'var(--col-push-bg)', color:'var(--col-push)',  hcolor:'var(--col-push)',  zone:'Zone 2–3', z1:1,z2:2}
   };
   var pc=phases[phase]||phases.warmup;
   var zones=calcHRZones(getSettings().age);
