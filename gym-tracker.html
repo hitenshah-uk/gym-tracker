@@ -325,7 +325,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.10.1';
+var APP_VERSION = '2.11.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -1723,6 +1723,13 @@ function renderSettings() {
     +'<div id="sync-last-time" style="font-size:12px;color:var(--text2);margin-top:4px;"></div>'
     +'</div>';
 
+  // Data Backup
+  html += '<div class="settings-section-title">Data Backup</div>';
+  html += '<div class="card">'
+    +'<div style="font-size:13px;color:var(--text2);line-height:1.6;margin-bottom:12px;">Download a full backup of all your sessions, body metrics, and settings as a single JSON file. Your GitHub token is never included.</div>'
+    +'<button class="btn btn-secondary btn-full" onclick="exportFullBackup()" style="height:40px;font-size:13px;">⬇ Full Backup JSON</button>'
+    +'</div>';
+
   html += '<div style="height:8px;"></div>';
   c.innerHTML = html;
   updateSyncUI();
@@ -2000,6 +2007,8 @@ function renderProgress() {
   // Weight log history
   html+='<div class="settings-section-title">Log History</div>';
   html+='<div class="card">'+buildWeightLogList(log)+'</div>';
+  // Export body data
+  html+='<button class="btn btn-secondary btn-full" onclick="exportBodyMetrics()" style="height:40px;font-size:13px;margin-bottom:4px;">⬇ Export Body Data CSV</button>';
   // Measurements
   html+='<div class="settings-section-title">Body Measurements</div>';
   html+='<div class="card">'
@@ -2239,7 +2248,7 @@ function renderHelp() {
     {label:'Deleting a session', text:'Expand a session and tap 🗑 Delete session at the bottom. A confirmation step appears — tap Yes, delete to confirm, or Cancel to go back. The deletion syncs to GitHub automatically.'},
     {label:'Filters', text:'Filter by day type or use the ⭐ Key lifts chip to show only key lift exercises across all expanded sessions.'},
     {label:'Progress sparklines', text:'Each exercise in a session shows a small chart of your last 8 clean sessions (excluding modified and deload). Shows last weight, peak, and trend direction.'},
-    {label:'Export', text:'Use Export CSV or Export JSON at the top of History to download your full session data — useful for analysis in Claude or Excel.'}
+    {label:'Export', text:'Use Export CSV or Export JSON at the top of History to download your full session data — useful for analysis in Claude or Excel. Export Body Data CSV on the Progress screen exports your weight log and measurements. Full Backup JSON in Settings exports everything (sessions + body data + settings) as a single file.'}
   ]);
   html+=hs('📈 Progress screen',[
     {label:'Accessing it', text:'Tap "📈 Body Composition & Measurements" in Settings to open the Progress screen.'},
@@ -2251,7 +2260,8 @@ function renderHelp() {
     {label:'Personal stats', text:'Enter your age and height for personalised metrics: BMI, max heart rate, BMR, TDEE, and heart rate zones. These feed into the Log and Timer screens.'},
     {label:'1RM Calculator', text:'Enter a recent weight and rep count to estimate your one rep max using the Epley formula.'},
     {label:'Drum increment', text:'Controls the step size of the weight drum (1 kg, 2.5 kg, or 5 kg). Set it to match the smallest plate you use.'},
-    {label:'GitHub sync', text:'Enter a Personal Access Token to sync sessions across devices via a private GitHub repo. Sessions merge automatically — you never lose data.'}
+    {label:'GitHub sync', text:'Enter a Personal Access Token to sync sessions across devices via a private GitHub repo. Sessions merge automatically — you never lose data.'},
+    {label:'Data backup', text:'Download a Full Backup JSON from Settings to save all your sessions, body metrics, and settings in one file. Your GitHub token is never included in the backup.'}
   ]);
   html+='<div class="settings-section-title">💡 Tips</div>';
   html+='<div class="card">';
@@ -2288,6 +2298,66 @@ function toggleTokenVisibility(btn) {
 }
 
 // ─── EXPORT ───
+function exportBodyMetrics() {
+  var s = getSettings();
+  var log = s.weightLog || [];
+  var meas = s.measurements || [];
+  if (log.length === 0 && meas.length === 0) { showToast('No body data to export'); return; }
+  // Merge on date
+  var byDate = {};
+  log.forEach(function(e) {
+    if (!byDate[e.date]) byDate[e.date] = {};
+    byDate[e.date].weight = e.weight || '';
+    byDate[e.date].bodyFat = e.bodyFat || '';
+  });
+  meas.forEach(function(e) {
+    if (!byDate[e.date]) byDate[e.date] = {};
+    byDate[e.date].waist  = e.waist  || '';
+    byDate[e.date].hips   = e.hips   || '';
+    byDate[e.date].chest  = e.chest  || '';
+    byDate[e.date].arms   = e.arms   || '';
+    byDate[e.date].thighs = e.thighs || '';
+  });
+  var dates = Object.keys(byDate).sort(function(a,b){ return a>b?-1:a<b?1:0; }); // newest-first
+  var rows = ['"Date","Weight (kg)","Body Fat (%)","Waist (cm)","Hips (cm)","Chest (cm)","Arms (cm)","Thighs (cm)"'];
+  dates.forEach(function(d) {
+    var r = byDate[d];
+    rows.push([d, r.weight||'', r.bodyFat||'', r.waist||'', r.hips||'', r.chest||'', r.arms||'', r.thighs||'']
+      .map(function(v){ return '"'+v+'"'; }).join(','));
+  });
+  var filename = 'body-metrics-'+new Date().toISOString().slice(0,10)+'.csv';
+  try {
+    var blob = new Blob([rows.join('\n')],{type:'text/csv'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+    showToast('Downloading '+filename);
+  } catch(e) { showToast('Export failed — try on desktop'); }
+}
+
+function exportFullBackup() {
+  var sessions = getAllSessions();
+  var s = getSettings();
+  // Strip token — must never leave localStorage
+  var settingsCopy = JSON.parse(JSON.stringify(s));
+  delete settingsCopy.githubToken;
+  var payload = { sessions: sessions, settings: settingsCopy, exportedAt: new Date().toISOString() };
+  var filename = 'gym-backup-'+new Date().toISOString().slice(0,10)+'.json';
+  try {
+    var blob = new Blob([JSON.stringify(payload, null, 2)],{type:'application/json'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href=url; a.download=filename;
+    document.body.appendChild(a); a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+    showToast('Downloading '+filename);
+  } catch(e) { showToast('Export failed — try on desktop'); }
+}
+
 function exportSessions(fmt) {
   var sessions = getAllSessions();
   if (sessions.length===0) { showToast('No sessions to export'); return; }
