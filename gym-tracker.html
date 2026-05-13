@@ -325,7 +325,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.11.0';
+var APP_VERSION = '2.12.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -792,7 +792,7 @@ function getLastSets(name) {
 function getSettings() {
   var s = lsGet('gymSettings');
   if (s) { try { return JSON.parse(s); } catch(e) {} }
-  return { age:'', heightCm:'', sex:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, activityLevel:1.55, measurements:[], weightLog:[], githubToken:'', rmWeight:'', rmReps:'' };
+  return { age:'', heightCm:'', sex:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, restDuration:90, activityLevel:1.55, measurements:[], weightLog:[], githubToken:'', rmWeight:'', rmReps:'' };
 }
 var _pauseSettingsSync=false;
 function writeSettings(s) { lsSet('gymSettings', JSON.stringify(s)); if(!_pauseSettingsSync) debouncedSettingsSync(); }
@@ -1361,6 +1361,7 @@ var restTimer = { active:false, secondsLeft:0, duration:90, intervalId:null };
 
 function startRestTimer() {
   if(restTimer.intervalId) clearInterval(restTimer.intervalId);
+  restTimer.duration = parseInt(getSettings().restDuration) || 90;
   restTimer.active=true; restTimer.secondsLeft=restTimer.duration;
   updateRestTimerDisplay();
   restTimer.intervalId=setInterval(function(){
@@ -1698,11 +1699,18 @@ function renderSettings() {
     +'<input type="date" value="'+esc(s.trainingStartDate||'')+'" onchange="updateSetting(\'trainingStartDate\',this.value)" style="text-align:left;">'
     +(wt?'<div style="margin-top:8px;font-size:15px;font-weight:700;color:var(--accent);">'+wt.weeks+' weeks, '+wt.days+' days training 🏆</div>':'')
     +'</div>'
-    +'<div><label style="margin-bottom:8px;">Default weight drum increment</label>'
+    +'<div style="margin-bottom:14px;"><label style="margin-bottom:8px;">Default weight drum increment</label>'
     +'<div class="seg-row">'
     +'<button class="seg-btn'+(parseFloat(s.drumIncrement)===1?' active':'')+'" onclick="updateDrumIncrement(1)">1 kg</button>'
     +'<button class="seg-btn'+(parseFloat(s.drumIncrement)===2.5?' active':'')+'" onclick="updateDrumIncrement(2.5)">2.5 kg</button>'
     +'<button class="seg-btn'+(parseFloat(s.drumIncrement)===5?' active':'')+'" onclick="updateDrumIncrement(5)">5 kg</button>'
+    +'</div></div>'
+    +'<div><label style="margin-bottom:8px;">Rest timer duration</label>'
+    +'<div class="seg-row">'
+    +'<button class="seg-btn'+((parseInt(s.restDuration)||90)===60?' active':'')+'" onclick="updateSetting(\'restDuration\',60);renderSettings();">60s</button>'
+    +'<button class="seg-btn'+((parseInt(s.restDuration)||90)===90?' active':'')+'" onclick="updateSetting(\'restDuration\',90);renderSettings();">90s</button>'
+    +'<button class="seg-btn'+((parseInt(s.restDuration)||90)===120?' active':'')+'" onclick="updateSetting(\'restDuration\',120);renderSettings();">2 min</button>'
+    +'<button class="seg-btn'+((parseInt(s.restDuration)||90)===180?' active':'')+'" onclick="updateSetting(\'restDuration\',180);renderSettings();">3 min</button>'
     +'</div></div>'
     +'</div>';
 
@@ -2232,7 +2240,7 @@ function renderHelp() {
   ]);
   html+=hs('✏️ Log tab',[
     {label:'Starting a session', text:'Tap the day chip at the top to select today\'s session. The exercises from your plan load automatically with last-session values pre-filled.'},
-    {label:'Logging sets', text:'Scroll the weight and reps drums to your values, then tap ✓ to mark the set done. A 90-second rest timer starts automatically after each set.'},
+    {label:'Logging sets', text:'Scroll the weight and reps drums to your values, then tap ✓ to mark the set done. A rest timer starts automatically after each set. Set the duration in Settings → Training (60s / 90s / 2 min / 3 min).'},
     {label:'Notes and RPE', text:'Each set has an optional note field and an RPE (Rate of Perceived Exertion) field. RPE runs 1–10: 7–8 is a challenging working set, 10 is absolute maximum effort.'},
     {label:'Cardio logging', text:'If your day includes cardio, a box appears below the day header. Tap Elliptical, Treadmill, or Bike to log your equipment in one tap — or choose Other to type a custom name. Fill in actual duration and average HR, then tick ✓ when complete.'},
     {label:'Saving a session', text:'Scroll to the bottom of the log and tap Save Session. The button sits at the bottom of the page so you have to scroll past your exercises to reach it — this prevents accidental saves.'},
@@ -2260,6 +2268,7 @@ function renderHelp() {
     {label:'Personal stats', text:'Enter your age and height for personalised metrics: BMI, max heart rate, BMR, TDEE, and heart rate zones. These feed into the Log and Timer screens.'},
     {label:'1RM Calculator', text:'Enter a recent weight and rep count to estimate your one rep max using the Epley formula.'},
     {label:'Drum increment', text:'Controls the step size of the weight drum (1 kg, 2.5 kg, or 5 kg). Set it to match the smallest plate you use.'},
+    {label:'Rest timer duration', text:'Set how long the rest timer runs after each set: 60s, 90s, 2 min, or 3 min. 90s suits most hypertrophy work; 2–3 min is better for heavy compound lifts like deadlifts and squats.'},
     {label:'GitHub sync', text:'Enter a Personal Access Token to sync sessions across devices via a private GitHub repo. Sessions merge automatically — you never lose data.'},
     {label:'Data backup', text:'Download a Full Backup JSON from Settings to save all your sessions, body metrics, and settings in one file. Your GitHub token is never included in the backup.'}
   ]);
