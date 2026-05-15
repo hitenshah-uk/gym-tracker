@@ -325,7 +325,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.12.0';
+var APP_VERSION = '2.12.1';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -1357,20 +1357,21 @@ function closeSummaryOverlay(){ document.getElementById('session-summary-overlay
 function confirmSaveSession(){ closeSummaryOverlay(); doSaveSession(); }
 
 // ─── REST TIMER ───
-var restTimer = { active:false, secondsLeft:0, duration:90, intervalId:null };
+var restTimer = { active:false, secondsLeft:0, duration:90, startedAt:null, intervalId:null };
 
 function startRestTimer() {
   if(restTimer.intervalId) clearInterval(restTimer.intervalId);
   restTimer.duration = parseInt(getSettings().restDuration) || 90;
-  restTimer.active=true; restTimer.secondsLeft=restTimer.duration;
+  restTimer.active=true; restTimer.startedAt=Date.now(); restTimer.secondsLeft=restTimer.duration;
   updateRestTimerDisplay();
   restTimer.intervalId=setInterval(function(){
-    restTimer.secondsLeft--;
+    var elapsed=Math.floor((Date.now()-restTimer.startedAt)/1000);
+    restTimer.secondsLeft=Math.max(0, restTimer.duration-elapsed);
     if(restTimer.secondsLeft<=0){
       restTimer.active=false; clearInterval(restTimer.intervalId); restTimer.intervalId=null;
       updateRestTimerDisplay(); playRestBeep();
     } else { updateRestTimerDisplay(); }
-  },1000);
+  },500);
 }
 function dismissRestTimer(){
   if(restTimer.intervalId) clearInterval(restTimer.intervalId);
@@ -1379,8 +1380,9 @@ function dismissRestTimer(){
 function updateRestTimerDisplay(){
   var el=document.getElementById('rest-timer-bar');
   var fl=document.getElementById('rest-timer-float');
+  // Always clear the inline bar — only the floating timer is shown
+  if(el){ el.style.cssText=''; el.innerHTML=''; }
   if(!restTimer.active){
-    if(el){ el.style.cssText=''; el.innerHTML=''; }
     if(fl){ fl.style.cssText='display:none;'; fl.innerHTML=''; }
     return;
   }
@@ -1390,11 +1392,10 @@ function updateRestTimerDisplay(){
   var timeStr=s>=60?Math.floor(s/60)+':'+(s%60<10?'0':'')+s%60:s+'s';
   var inner='<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:'+t.color+';flex-shrink:0;">Rest</div>'
     +'<div style="flex:1;"><div style="height:5px;border-radius:3px;background:var(--border);overflow:hidden;">'
-    +'<div style="height:100%;border-radius:3px;background:'+t.color+';width:'+pct+'%;transition:width 0.9s linear;"></div>'
+    +'<div style="height:100%;border-radius:3px;background:'+t.color+';width:'+pct+'%;transition:width 0.45s linear;"></div>'
     +'</div></div>'
     +'<div style="font-size:20px;font-weight:900;color:'+t.color+';font-variant-numeric:tabular-nums;flex-shrink:0;min-width:40px;text-align:right;">'+timeStr+'</div>'
     +'<button onclick="dismissRestTimer()" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:5px 12px;font-size:12px;font-weight:700;cursor:pointer;color:var(--text2);flex-shrink:0;">Skip</button>';
-  if(el){ el.style.cssText='display:flex;align-items:center;gap:12px;background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;margin-bottom:14px;'; el.innerHTML=inner; }
   if(fl){ fl.style.cssText='display:flex;align-items:center;gap:12px;background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;position:fixed;bottom:calc(var(--nav-h) + var(--safe-bottom) + 8px);left:50%;transform:translateX(-50%);width:calc(100% - 32px);max-width:568px;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,0.25);'; fl.innerHTML=inner; }
 }
 function playRestBeep(){
@@ -2739,6 +2740,17 @@ function releaseWakeLock() {
   setTimeout(function(){ syncToGitHub(false); }, 1000);
   setTimeout(function(){ fetchSettingsFromGitHub(); }, 1500);
   if (!lsGet('gymOnboarded')) setTimeout(function(){ showOnboarding(); }, 400);
+  document.addEventListener('visibilitychange', function(){
+    if (document.visibilityState==='visible' && restTimer.active) {
+      var elapsed=Math.floor((Date.now()-restTimer.startedAt)/1000);
+      restTimer.secondsLeft=Math.max(0, restTimer.duration-elapsed);
+      if(restTimer.secondsLeft<=0){
+        restTimer.active=false;
+        if(restTimer.intervalId){ clearInterval(restTimer.intervalId); restTimer.intervalId=null; }
+        updateRestTimerDisplay(); playRestBeep();
+      } else { updateRestTimerDisplay(); }
+    }
+  });
 })();
 
 renderPlan();
