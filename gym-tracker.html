@@ -230,6 +230,18 @@
   #onboarding-overlay.open { display:flex; }
   .onboarding-card { background:var(--surface); border-radius:24px; width:100%; max-width:380px; padding:32px 24px 24px; text-align:center; }
 
+  /* READINESS CHECK-IN */
+  .r-row { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
+  .r-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.4px; color: var(--text2); min-width: 90px; flex-shrink: 0; }
+  .r-btns { display: flex; gap: 4px; }
+  .r-btn { width: 30px; height: 30px; border-radius: 8px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; transition: all 0.15s; }
+  .r-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .r-hint { font-size: 10px; color: var(--text2); margin-left: 4px; white-space: nowrap; }
+
+  /* INJURY LOG */
+  .inj-chip { display: inline-flex; align-items: center; padding: 5px 11px; border-radius: 20px; border: 1.5px solid var(--border); background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .inj-chip.active { background: var(--col-lower-bg); border-color: var(--col-lower); color: var(--col-lower); }
+
   /* EXERCISE PICKER */
   #ex-picker-overlay, #session-summary-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; align-items:flex-end; justify-content:center; }
   #ex-picker-overlay.open, #session-summary-overlay.open { display:flex; }
@@ -342,7 +354,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.12.5';
+var APP_VERSION = '2.14.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -843,7 +855,7 @@ function getLastSets(name) {
 function getSettings() {
   var s = lsGet('gymSettings');
   if (s) { try { return JSON.parse(s); } catch(e) {} }
-  return { age:'', heightCm:'', sex:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, restDuration:90, activityLevel:1.55, measurements:[], weightLog:[], githubToken:'', rmWeight:'', rmReps:'' };
+  return { age:'', heightCm:'', sex:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, restDuration:90, activityLevel:1.55, measurements:[], weightLog:[], heartRateLog:[], githubToken:'', rmWeight:'', rmReps:'' };
 }
 var _pauseSettingsSync=false;
 function writeSettings(s) { lsSet('gymSettings', JSON.stringify(s)); if(!_pauseSettingsSync) debouncedSettingsSync(); }
@@ -1143,7 +1155,18 @@ function copyDayFrom(targetDay,sourceDay) {
 // ─── LOG SCREEN ───
 var REP_VALS = [];
 for (var _r=1;_r<=40;_r++) REP_VALS.push(_r);
-var logState = { selectedDay:null, exercises:[], cardioDone:false, cardioActual:{}, startedAt:null, injuryModified:false, isDeload:false };
+var logState = { selectedDay:null, exercises:[], cardioDone:false, cardioActual:{}, startedAt:null, injuryModified:false, isDeload:false, readiness:{sleepQuality:null,energy:null,stress:null,hoursSlept:''}, injuries:[] };
+var INJ_AREAS = ['Lower back','Upper back','Left knee','Right knee','Left shoulder','Right shoulder','Hip','Neck','Ankle'];
+var _readinessOpen = true;
+function rDots(field, val) {
+  var dots='';
+  for(var d=1;d<=5;d++) {
+    dots += '<button class="r-btn'+(val===d?' active':'')+'" onclick="setReadiness(\''+field+'\','+d+')" type="button">'+d+'</button>';
+  }
+  return dots;
+}
+function setHoursSlept(val) { logState.readiness.hoursSlept = val; }
+function toggleReadiness() { _readinessOpen = !_readinessOpen; renderLog(); }
 
 function defaultWeight(ls,si) { if(ls&&ls[si]) return parseFloat(ls[si].weight)||0; if(ls&&ls[0]) return parseFloat(ls[0].weight)||0; return 0; }
 function defaultReps(ls,si)   { if(ls&&ls[si]) return parseInt(ls[si].reps)||10;   if(ls&&ls[0]) return parseInt(ls[0].reps)||10;   return 10; }
@@ -1211,6 +1234,36 @@ function renderLog() {
   }
   html += '</div>';
 
+  // Readiness check-in card (collapsible)
+  var rd = logState.readiness;
+  var rdFilled = rd.sleepQuality||rd.energy||rd.stress||rd.hoursSlept;
+  var rdSummaryParts = [];
+  if (rd.sleepQuality) rdSummaryParts.push('Sleep '+rd.sleepQuality+'/5');
+  if (rd.energy)       rdSummaryParts.push('Energy '+rd.energy+'/5');
+  if (rd.stress)       rdSummaryParts.push('Stress '+rd.stress+'/5');
+  if (rd.hoursSlept)   rdSummaryParts.push(rd.hoursSlept+'h sleep');
+  var rdSummary = rdSummaryParts.length ? rdSummaryParts.join(' · ') : 'Tap to fill in';
+  html += '<div class="card" style="margin-bottom:16px;padding:0;overflow:hidden;">'
+    +'<div onclick="toggleReadiness()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;">'
+    +'<div>'
+    +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);">Pre-session check-in</div>'
+    +(!_readinessOpen?'<div style="font-size:12px;color:'+(rdFilled?'var(--text)':'var(--text2)')+';margin-top:2px;">'+esc(rdSummary)+'</div>':'')
+    +'</div>'
+    +'<span style="font-size:16px;color:var(--text2);font-weight:700;line-height:1;">'
+    +(_readinessOpen?'▴':'▾')+'</span>'
+    +'</div>';
+  if (_readinessOpen) {
+    html += '<div style="padding:0 14px 12px;">'
+      +'<div class="r-row"><span class="r-label">Sleep quality</span><div class="r-btns">'+rDots('sleepQuality',rd.sleepQuality)+'</div><span class="r-hint">'+(!rd.sleepQuality?'':'★'.repeat(rd.sleepQuality))+'</span></div>'
+      +'<div class="r-row"><span class="r-label">Energy</span><div class="r-btns">'+rDots('energy',rd.energy)+'</div><span class="r-hint">'+(!rd.energy?'':'★'.repeat(rd.energy))+'</span></div>'
+      +'<div class="r-row"><span class="r-label">Stress</span><div class="r-btns">'+rDots('stress',rd.stress)+'</div><span class="r-hint" style="color:'+(rd.stress&&rd.stress>=4?'var(--col-lower)':'var(--text2)')+';">'+(!rd.stress?'':'('+(rd.stress>=4?'high':'ok')+')')+'</span></div>'
+      +'<div class="r-row" style="margin-top:4px;"><span class="r-label">Hours slept</span>'
+      +'<input type="number" inputmode="decimal" min="0" max="24" step="0.5" placeholder="—" value="'+esc(rd.hoursSlept||'')+'" oninput="setHoursSlept(this.value)" style="width:64px;font-size:15px;font-weight:700;text-align:center;padding:6px 8px;">'
+      +'<span class="r-hint">hrs</span></div>'
+      +'</div>';
+  }
+  html += '</div>';
+
   // Hint
   html += '<div style="background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--text);line-height:1.6;">'
     +'<strong style="color:'+t.color+';">Scroll</strong> the wheels to set weight and reps, then tap <strong style="color:var(--col-done);">✓</strong> to mark each set done.</div>';
@@ -1274,6 +1327,28 @@ function renderLog() {
     +'<button class="btn btn-secondary btn-full" onclick="openExPicker(\'log\',null)" style="height:50px;font-size:15px;font-weight:700;">+ Add Exercise</button>'
     +'</div>';
 
+  // Injury log section
+  html += '<div class="card" style="margin-bottom:16px;">'
+    +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:10px;">Injury / Pain log <span style="font-size:10px;font-weight:600;text-transform:none;letter-spacing:0;">(tap to flag a sore area)</span></div>'
+    +'<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;">';
+  INJ_AREAS.forEach(function(area) {
+    var entry = logState.injuries.filter(function(x){return x.area===area;})[0];
+    html += '<button class="inj-chip'+(entry?' active':'')+'" onclick="toggleInjuryArea(\''+esc(area)+'\')">'+esc(area)+'</button>';
+  });
+  html += '</div>';
+  logState.injuries.forEach(function(inj) {
+    html += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">'
+      +'<span style="font-size:12px;font-weight:700;min-width:110px;color:var(--col-lower);">'+esc(inj.area)+'</span>'
+      +'<div style="display:flex;gap:3px;">';
+    for(var lv=1;lv<=5;lv++) {
+      html += '<button class="r-btn'+(inj.level===lv?' active':'')+'" onclick="setInjuryLevel(\''+esc(inj.area)+'\','+lv+')" type="button">'+lv+'</button>';
+    }
+    html += '</div>'
+      +'<span style="font-size:10px;color:var(--text2);">pain</span>'
+      +'</div>';
+  });
+  html += '</div>';
+
   html += '<div class="save-bar"><button class="btn btn-primary btn-full" onclick="showSessionSummary()" style="font-size:16px;height:52px;">💾 Save Session</button></div>';
 
   document.getElementById('log-content').innerHTML = html;
@@ -1289,11 +1364,28 @@ function selectDay(day) {
     if(hasDone && !confirm('You have logged sets for '+logState.selectedDay+'. Switch to '+day+' and lose this progress?')) return;
   }
   logState.selectedDay=day; logState.cardioDone=false; logState.cardioActual={}; logState.startedAt=null; logState.injuryModified=false; logState.isDeload=false;
+  logState.readiness={sleepQuality:null,energy:null,stress:null,hoursSlept:''}; logState.injuries=[];
+  _readinessOpen=true;
   _cardioOtherMode=false;
   dismissRestTimer();
   logState.exercises=plan[day].exercises.map(function(name){ var ls=getLastSets(name); return {name:name,sets:[{weight:defaultWeight(ls,0),reps:defaultReps(ls,0),note:'',rpe:null,done:false}]}; });
   renderLog();
 }
+function setReadiness(field, val) {
+  if (logState.readiness[field] === val) { logState.readiness[field] = null; } else { logState.readiness[field] = val; }
+  renderLog();
+}
+function toggleInjuryArea(area) {
+  var idx = logState.injuries.findIndex(function(x){return x.area===area;});
+  if (idx >= 0) { logState.injuries.splice(idx,1); } else { logState.injuries.push({area:area,level:null}); }
+  renderLog();
+}
+function setInjuryLevel(area, level) {
+  var idx = logState.injuries.findIndex(function(x){return x.area===area;});
+  if (idx >= 0) { logState.injuries[idx].level = (logState.injuries[idx].level === level) ? null : level; }
+  renderLog();
+}
+
 function toggleDone(ei,si) {
   // Flush drum scroll positions directly from DOM before recording done state —
   // prevents the 120ms debounce race where tapping ✓ immediately after scrolling
@@ -1356,9 +1448,10 @@ function doSaveSession() {
   _isSaving=true;
   try {
     var now=new Date(), saveTs=Date.now();
-    writeSession({id:saveTs,date:now.toISOString(),day:logState.selectedDay,label:sd.label||logState.selectedDay,cardio:getCardioLabel(sd),cardioDone:logState.cardioDone,cardioActual:logState.cardioActual||null,startedAt:logState.startedAt||null,savedAt:saveTs,injuryModified:logState.injuryModified||false,isDeload:logState.isDeload||false,exercises:exercises});
+    writeSession({id:saveTs,date:now.toISOString(),day:logState.selectedDay,label:sd.label||logState.selectedDay,cardio:getCardioLabel(sd),cardioDone:logState.cardioDone,cardioActual:logState.cardioActual||null,startedAt:logState.startedAt||null,savedAt:saveTs,injuryModified:logState.injuryModified||false,isDeload:logState.isDeload||false,readiness:logState.readiness||null,injuries:logState.injuries||[],exercises:exercises});
     showToast('Session saved ✓');
     logState.selectedDay=null; logState.exercises=[]; logState.cardioActual={}; logState.startedAt=null; logState.injuryModified=false; logState.isDeload=false;
+    logState.readiness={sleepQuality:null,energy:null,stress:null,hoursSlept:''}; logState.injuries=[];
     dismissRestTimer();
     renderLog();
     syncToGitHub(false);
@@ -1510,6 +1603,109 @@ function renderSparkline(vals, color) {
 
 // ─── HISTORY SCREEN ───
 var hOpen={}, hFilter='all', hSearch='', hKeyLifts=false, _hDeleteConfirmId=null;
+// ─── LAST 7 DAYS CARD ───
+var MG_BUCKET_MAP = {
+  'CHEST':'Push','SHOULDERS':'Push','TRICEPS':'Push',
+  'BACK':'Pull','BICEPS':'Pull',
+  'QUADS':'Lower','HAMSTRINGS':'Lower','GLUTES':'Lower','HIPS':'Lower','CALVES':'Lower',
+  'CORE':'Core','FULL BODY':'Full Body'
+};
+var MG_BUCKET_ORDER = ['Push','Pull','Lower','Core','Full Body','Untagged'];
+var MG_BUCKET_COLORS = {'Push':'#2563eb','Pull':'#16a34a','Lower':'#ea580c','Core':'#dc2626','Full Body':'#6b7280','Untagged':'#9ca3af'};
+var _weekCardOpen = true;
+function toggleWeekCard() { _weekCardOpen=!_weekCardOpen; renderHistory(); }
+
+function buildWeekCard() {
+  var cutoff = Date.now() - 7*24*60*60*1000;
+  var sessions7 = getAllSessions().filter(function(s){
+    return (s.savedAt||new Date(s.date).getTime()) >= cutoff;
+  });
+  var buckets = {Push:0,Pull:0,Lower:0,Core:0,'Full Body':0,Untagged:0};
+  var meta = getExMeta();
+  sessions7.forEach(function(s){
+    s.exercises.forEach(function(ex){
+      var mg = meta[ex.name]||'';
+      var bucket = MG_BUCKET_MAP[mg]||'Untagged';
+      var doneSets = ex.sets.filter(function(st){return st.done;}).length;
+      buckets[bucket] += doneSets;
+    });
+  });
+  var totalSets = MG_BUCKET_ORDER.reduce(function(n,k){return n+buckets[k];},0);
+  var maxSets = Math.max.apply(null, MG_BUCKET_ORDER.map(function(k){return buckets[k];})) || 1;
+  var sessionCount = sessions7.length;
+
+  var h = '<div class="card" style="margin-bottom:16px;padding:0;overflow:hidden;">';
+  // Header row
+  h += '<div onclick="toggleWeekCard()" style="display:flex;align-items:center;justify-content:space-between;padding:12px 14px;cursor:pointer;">';
+  h += '<div>';
+  h += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);">Last 7 days</div>';
+  if (!_weekCardOpen) {
+    h += '<div style="font-size:12px;color:var(--text);margin-top:2px;">'+sessionCount+' session'+(sessionCount!==1?'s':'')+' &nbsp;·&nbsp; '+totalSets+' sets</div>';
+  }
+  h += '</div>';
+  h += '<span style="font-size:16px;color:var(--text2);font-weight:700;line-height:1;">'+(_weekCardOpen?'▴':'▾')+'</span>';
+  h += '</div>';
+
+  if (_weekCardOpen) {
+    if (sessionCount === 0) {
+      h += '<div style="padding:0 14px 14px;font-size:13px;color:var(--text2);">No sessions in the last 7 days.</div>';
+    } else {
+      h += '<div style="padding:0 14px 14px;">';
+      // Volume bars
+      MG_BUCKET_ORDER.forEach(function(bucket){
+        var count = buckets[bucket];
+        if (bucket==='Untagged' && count===0) return;
+        var color = MG_BUCKET_COLORS[bucket];
+        var pct = Math.round(count/maxSets*100);
+        h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">';
+        h += '<span style="font-size:11px;font-weight:700;color:'+color+';min-width:62px;">'+bucket+'</span>';
+        h += '<div style="flex:1;height:12px;background:var(--surface2);border-radius:6px;overflow:hidden;">';
+        if (count>0) h += '<div style="width:'+pct+'%;height:100%;background:'+color+';border-radius:6px;transition:width 0.3s;"></div>';
+        h += '</div>';
+        h += '<span style="font-size:12px;font-weight:700;color:var(--text);min-width:24px;text-align:right;">'+count+'</span>';
+        h += '<span style="font-size:10px;color:var(--text2);">sets</span>';
+        h += '</div>';
+      });
+      // Balance section
+      h += '<div style="border-top:1px solid var(--border);margin-top:6px;padding-top:10px;">';
+      h += '<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:8px;">Balance check</div>';
+      // Push vs Pull
+      var push=buckets.Push, pull=buckets.Pull;
+      var ppDot,ppColor,ppMsg;
+      if (push===0&&pull===0){ppDot='⚪';ppColor='var(--text2)';ppMsg='No push or pull work logged';}
+      else if (push===0){ppDot='🔴';ppColor='#dc2626';ppMsg='No push work this week';}
+      else if (pull===0){ppDot='🔴';ppColor='#dc2626';ppMsg='No pull work this week';}
+      else { var ratio=push/pull;
+        if(ratio>2||ratio<0.5){ppDot='🔴';ppColor='#dc2626';ppMsg='Push '+push+' vs Pull '+pull+' — significant imbalance';}
+        else if(ratio>1.5||ratio<0.67){ppDot='🟡';ppColor='#b45309';ppMsg='Push '+push+' vs Pull '+pull+' — slight imbalance';}
+        else{ppDot='🟢';ppColor='#16a34a';ppMsg='Push '+push+' vs Pull '+pull+' — balanced';}
+      }
+      h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><span style="font-size:13px;">'+ppDot+'</span><span style="font-size:12px;font-weight:700;color:'+ppColor+';min-width:80px;">Push / Pull</span><span style="font-size:11px;color:var(--text2);">'+esc(ppMsg)+'</span></div>';
+      // Core
+      var coreDot,coreColor,coreMsg;
+      var coreCount=buckets.Core;
+      if(coreCount===0){coreDot='🔴';coreColor='#dc2626';coreMsg='No core work this week';}
+      else if(coreCount<6){coreDot='🟡';coreColor='#b45309';coreMsg=coreCount+' sets — consider adding more';}
+      else{coreDot='🟢';coreColor='#16a34a';coreMsg=coreCount+' sets';}
+      h += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;"><span style="font-size:13px;">'+coreDot+'</span><span style="font-size:12px;font-weight:700;color:'+coreColor+';min-width:80px;">Core</span><span style="font-size:11px;color:var(--text2);">'+esc(coreMsg)+'</span></div>';
+      // Lower body
+      var lowerDot,lowerColor,lowerMsg;
+      var lowerCount=buckets.Lower;
+      if(lowerCount===0){lowerDot='🔴';lowerColor='#dc2626';lowerMsg='No lower body work this week';}
+      else{lowerDot='🟢';lowerColor='#16a34a';lowerMsg=lowerCount+' sets';}
+      h += '<div style="display:flex;align-items:center;gap:6px;">  <span style="font-size:13px;">'+lowerDot+'</span><span style="font-size:12px;font-weight:700;color:'+lowerColor+';min-width:80px;">Lower body</span><span style="font-size:11px;color:var(--text2);">'+esc(lowerMsg)+'</span></div>';
+      // Untagged warning
+      if (buckets.Untagged>0) {
+        h += '<div style="margin-top:10px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:6px 10px;">⚠ '+buckets.Untagged+' sets from untagged exercises — tag them in the Exercise Library for accurate tracking.</div>';
+      }
+      h += '</div>'; // balance
+      h += '</div>'; // content
+    }
+  }
+  h += '</div>'; // card
+  return h;
+}
+
 function renderHistory() {
   var c=document.getElementById('history-content');
   var sessions=getAllSessions().slice().reverse();
@@ -1527,6 +1723,9 @@ function renderHistory() {
   });
   html += '<div class="filter-chip" style="'+(hKeyLifts?'background:#f59e0b;color:#fff;border-color:#f59e0b;':'')+'" onclick="hKeyLifts=!hKeyLifts;renderHistory()">⭐ Key lifts</div>';
   html += '</div>';
+
+  // Last 7 days card
+  html += buildWeekCard();
 
   // Export bar
   html += '<div style="display:flex;gap:8px;margin-bottom:16px;">'
@@ -2025,6 +2224,105 @@ function buildWeightLogList(log) {
   return h+'</div>';
 }
 
+var _hrExpanded = false;
+function toggleHRExpand() { _hrExpanded=!_hrExpanded; var el=document.getElementById('hr-log-list'); if(el){var s=getSettings();el.innerHTML=buildHRLogList(s.heartRateLog||[]);} }
+
+function buildHRLogList(log) {
+  if (!log||log.length===0) return '<div style="text-align:center;padding:16px;color:var(--text2);font-size:13px;">No entries yet — add your resting HR above.</div>';
+  var PREVIEW=3;
+  var showAll=_hrExpanded||log.length<=PREVIEW;
+  var visible=showAll?log:log.slice(0,PREVIEW);
+  var h='<div style="margin-top:8px;">';
+  visible.forEach(function(e,i){
+    h+='<div class="measurement-entry">'
+      +'<div><div class="measurement-date">'+esc(e.date)+'</div><div class="measurement-vals">'+esc(e.bpm||'—')+' BPM</div></div>'
+      +'<button class="btn-icon" onclick="removeHREntry('+i+')" style="color:var(--col-lower);background:var(--col-lower-bg);border:none;flex-shrink:0;">✕</button>'
+      +'</div>';
+  });
+  if (log.length>PREVIEW) {
+    h+='<button onclick="toggleHRExpand()" style="background:none;border:none;color:var(--accent);font-size:13px;font-weight:600;cursor:pointer;padding:10px 0;width:100%;text-align:center;">'
+      +(showAll?'Show less ▴':'Show all '+log.length+' entries ▾')+'</button>';
+  }
+  return h+'</div>';
+}
+
+function addHREntry() {
+  var dateEl=document.getElementById('hr-date'), bpmEl=document.getElementById('hr-bpm');
+  if (!bpmEl||!bpmEl.value) { showToast('Enter a BPM value'); return; }
+  var s=getSettings();
+  if (!s.heartRateLog) s.heartRateLog=[];
+  s.heartRateLog.unshift({date:dateEl?dateEl.value:todayISO(), bpm:parseInt(bpmEl.value)||0});
+  s.heartRateLog.sort(function(a,b){return b.date.localeCompare(a.date);}); // newest first
+  writeSettings(s);
+  renderProgress();
+}
+
+function removeHREntry(idx) {
+  var s=getSettings();
+  if (!s.heartRateLog) return;
+  s.heartRateLog.splice(idx,1);
+  writeSettings(s);
+  var el=document.getElementById('hr-log-list');
+  if (el) el.innerHTML=buildHRLogList(s.heartRateLog);
+  var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  if (s.heartRateLog.length>=1) { setTimeout(function(){drawHRChart('chart-hr',s.heartRateLog,isDark?'#f472b6':'#db2777');},0); }
+  else { var w=document.getElementById('hr-chart-wrap'); if(w) w.style.display='none'; }
+}
+
+function drawHRChart(canvasId, log, color) {
+  var canvas=document.getElementById(canvasId);
+  if (!canvas) return;
+  var dpr=window.devicePixelRatio||1;
+  var W=canvas.offsetWidth||canvas.parentElement.offsetWidth||300;
+  var H=140;
+  canvas.width=W*dpr; canvas.height=H*dpr;
+  canvas.style.width=W+'px'; canvas.style.height=H+'px';
+  var ctx=canvas.getContext('2d');
+  ctx.scale(dpr,dpr);
+  // oldest first for chart
+  var pts=log.slice().reverse().filter(function(e){return e.bpm>0;});
+  if (pts.length<1) return;
+  var vals=pts.map(function(e){return e.bpm;});
+  var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+  var pad={t:12,r:12,b:28,l:36};
+  var cw=W-pad.l-pad.r, ch=H-pad.t-pad.b;
+  var range=mx-mn||10; mn=mn-range*0.1; mx=mx+range*0.1;
+  var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
+  var textCol=isDark?'rgba(255,255,255,0.5)':'rgba(0,0,0,0.4)';
+  var gridCol=isDark?'rgba(255,255,255,0.07)':'rgba(0,0,0,0.07)';
+  ctx.clearRect(0,0,W,H);
+  // grid
+  ctx.strokeStyle=gridCol; ctx.lineWidth=1;
+  for(var g=0;g<4;g++){var y2=pad.t+ch*(1-g/3);ctx.beginPath();ctx.moveTo(pad.l,y2);ctx.lineTo(pad.l+cw,y2);ctx.stroke();}
+  // y labels
+  ctx.fillStyle=textCol; ctx.font='9px sans-serif'; ctx.textAlign='right';
+  for(var g2=0;g2<4;g2++){var yv=mn+(mx-mn)*g2/3;var y3=pad.t+ch*(1-g2/3);ctx.fillText(Math.round(yv),pad.l-4,y3+3);}
+  // line
+  ctx.beginPath(); ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin='round';
+  pts.forEach(function(e,i){
+    var xp=pad.l+(pts.length<2?cw/2:i*cw/(pts.length-1));
+    var yp=pad.t+ch*(1-(e.bpm-mn)/(mx-mn));
+    if(i===0) ctx.moveTo(xp,yp); else ctx.lineTo(xp,yp);
+  });
+  ctx.stroke();
+  // dots (sparse mode only)
+  if (pts.length<=30) {
+    pts.forEach(function(e,i){
+      var xp=pad.l+(pts.length<2?cw/2:i*cw/(pts.length-1));
+      var yp=pad.t+ch*(1-(e.bpm-mn)/(mx-mn));
+      ctx.beginPath(); ctx.arc(xp,yp,3,0,Math.PI*2);
+      ctx.fillStyle=color; ctx.fill();
+    });
+  }
+  // x labels (first, last, and a couple in between)
+  ctx.fillStyle=textCol; ctx.font='9px sans-serif'; ctx.textAlign='center';
+  var steps=[0, Math.floor(pts.length/2), pts.length-1].filter(function(v,i,a){return a.indexOf(v)===i;});
+  steps.forEach(function(i){
+    var xp=pad.l+(pts.length<2?cw/2:i*cw/(pts.length-1));
+    ctx.fillText(pts[i].date.slice(5),xp,H-6); // MM-DD
+  });
+}
+
 function renderProgress() {
   var s=getSettings(), c=document.getElementById('progress-content');
   if (!c) return;
@@ -2085,6 +2383,22 @@ function renderProgress() {
   html+='<div class="card">'+buildWeightLogList(log)+'</div>';
   // Export body data
   html+='<button class="btn btn-secondary btn-full" onclick="exportBodyMetrics()" style="height:40px;font-size:13px;margin-bottom:4px;">⬇ Export Body Data CSV</button>';
+  // Resting Heart Rate
+  var hrLog = s.heartRateLog||[];
+  html+='<div class="settings-section-title">Resting Heart Rate</div>';
+  html+='<div class="card">'
+    +'<div style="font-size:13px;color:var(--text2);margin-bottom:12px;">Log your resting HR each morning before getting up for the most accurate reading.</div>'
+    +'<div style="display:flex;gap:8px;align-items:flex-end;margin-bottom:8px;">'
+    +'<div style="flex:1;"><label style="font-size:10px;margin-bottom:3px;">Date</label><input type="date" id="hr-date" value="'+todayISO()+'" style="text-align:left;width:100%;"></div>'
+    +'<div style="width:90px;"><label style="font-size:10px;margin-bottom:3px;">BPM</label>'
+    +'<div style="display:flex;align-items:center;gap:4px;">'
+    +'<input type="number" id="hr-bpm" inputmode="numeric" min="30" max="200" placeholder="—" style="font-size:15px;font-weight:700;text-align:center;padding:6px 6px;width:100%;">'
+    +'</div></div>'
+    +'<button class="btn btn-secondary" onclick="addHREntry()" style="height:40px;white-space:nowrap;flex-shrink:0;">+ Add</button>'
+    +'</div>'
+    +(hrLog.length>=1?'<div id="hr-chart-wrap"><canvas id="chart-hr" style="width:100%;height:140px;display:block;margin-bottom:8px;"></canvas></div>':'')
+    +'<div id="hr-log-list">'+buildHRLogList(hrLog)+'</div>'
+    +'</div>';
   // Measurements
   html+='<div class="settings-section-title">Body Measurements</div>';
   html+='<div class="card">'
@@ -2107,6 +2421,8 @@ function renderProgress() {
     var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
     if (filteredWeight.length>=1) drawBodyChart('chart-weight', filteredWeight, isDark?'#60a5fa':'#2563eb', 67, '67kg target', 'kg');
     if (filteredBF.length>=1) drawBodyChart('chart-bf', filteredBF, isDark?'#fb923c':'#ea580c', 25, '25% target', '%');
+    var hrLog2=getSettings().heartRateLog||[];
+    if (hrLog2.length>=1) drawHRChart('chart-hr', hrLog2, isDark?'#f472b6':'#db2777');
   }, 0);
 }
 
