@@ -354,7 +354,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.14.1';
+var APP_VERSION = '2.14.2';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -1615,17 +1615,31 @@ var MG_BUCKET_COLORS = {'Push':'#2563eb','Pull':'#16a34a','Lower':'#ea580c','Cor
 var _weekCardOpen = true;
 function toggleWeekCard() { _weekCardOpen=!_weekCardOpen; renderHistory(); }
 
+function dayLabelToBucket(label) {
+  var l = (label||'').toLowerCase();
+  if (l.indexOf('push') !== -1 || l.indexOf('chest') !== -1) return 'Push';
+  if (l.indexOf('pull') !== -1 || l.indexOf('back') !== -1) return 'Pull';
+  if (l.indexOf('leg') !== -1 || l.indexOf('lower') !== -1) return 'Lower';
+  if (l.indexOf('full') !== -1) return 'Full Body'; // check before core: "Full Body + Core" → Full Body
+  if (l.indexOf('core') !== -1 || l.indexOf('abs') !== -1) return 'Core';
+  return null;
+}
+
 function buildWeekCard() {
   var cutoff = Date.now() - 7*24*60*60*1000;
   var sessions7 = getAllSessions().filter(function(s){
     return (s.savedAt||new Date(s.date).getTime()) >= cutoff;
   });
   var buckets = {Push:0,Pull:0,Lower:0,Core:0,'Full Body':0,Untagged:0};
+  // Build exercise library lookup (primary source for muscle groups)
+  var exLibLookup = {};
+  getExLib().forEach(function(x){ if(x.muscleGroup) exLibLookup[x.name] = x.muscleGroup; });
   var meta = getExMeta();
   sessions7.forEach(function(s){
+    var dayBucket = dayLabelToBucket(s.label||s.day);
     (s.exercises||[]).forEach(function(ex){
-      var mg = meta[ex.name]||'';
-      var bucket = MG_BUCKET_MAP[mg]||'Untagged';
+      var mg = exLibLookup[ex.name] || meta[ex.name] || '';
+      var bucket = MG_BUCKET_MAP[mg] || dayBucket || 'Untagged';
       var doneSets = ex.sets.filter(function(st){return st.done;}).length;
       buckets[bucket] += doneSets;
     });
@@ -1696,7 +1710,7 @@ function buildWeekCard() {
       h += '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;">'+lowerDot+'</span><span style="font-size:12px;font-weight:700;color:'+lowerColor+';min-width:80px;">Lower body</span><span style="font-size:11px;color:var(--text2);">'+esc(lowerMsg)+'</span></div>';
       // Untagged warning
       if (buckets.Untagged>0) {
-        h += '<div style="margin-top:10px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:6px 10px;">⚠ '+buckets.Untagged+' sets from untagged exercises — tag them in the Exercise Library for accurate tracking.</div>';
+        h += '<div style="margin-top:10px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:6px 10px;">⚠ '+buckets.Untagged+' sets could not be assigned to a muscle group. Tag those exercises in the Exercise Library for full accuracy.</div>';
       }
       h += '</div>'; // balance
       h += '</div>'; // content
