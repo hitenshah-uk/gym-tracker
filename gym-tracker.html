@@ -18,6 +18,7 @@
     --col-rest: #9ca3af;  --col-rest-bg: #f3f4f6;
     --col-done: #16a34a;  --col-done-bg: #dcfce7;
     --col-build: #0891b2; --col-build-bg: #cffafe;
+    --toggle-thumb: #ffffff;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -30,12 +31,15 @@
       --col-rest: #6b7280;  --col-rest-bg: #1f2937;
       --col-done: #4ade80;  --col-done-bg: #0f2a18;
       --col-build: #22d3ee; --col-build-bg: #164e63;
+      --toggle-thumb: #e0e0e5;
     }
   }
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  *:focus { outline: none; } /* suppress browser default; :focus-visible handles keyboard below */
+  *:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
   html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Helvetica Neue', sans-serif; background: var(--bg); color: var(--text); font-size: 16px; line-height: 1.5; overflow: hidden; }
   #app { display: flex; flex-direction: column; height: 100%; max-width: 600px; margin: 0 auto; }
-  .screen { display: none; flex: 1; overflow-y: auto; padding: 0 16px calc(var(--nav-h) + var(--safe-bottom) + 16px); -webkit-overflow-scrolling: touch; }
+  .screen { display: none; flex: 1; overflow-y: auto; padding: 0 16px calc(var(--nav-h) + var(--safe-bottom) + 16px); }
   .screen.active { display: block; }
 
   /* NAV */
@@ -75,6 +79,12 @@
 
   /* BADGES */
   .badge { display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; }
+  .badge-push  { background: var(--col-push-bg);  color: var(--col-push); }
+  .badge-pull  { background: var(--col-pull-bg);  color: var(--col-pull); }
+  .badge-lower { background: var(--col-lower-bg); color: var(--col-lower); }
+  .badge-full  { background: var(--col-full-bg);  color: var(--col-full); }
+  .badge-rest  { background: var(--col-rest-bg);  color: var(--col-rest); }
+  .badge-build { background: var(--col-build-bg); color: var(--col-build); }
 
   /* DIVIDER */
   .divider { height: 1px; background: var(--border); margin: 12px 0; }
@@ -86,6 +96,12 @@
   /* CARDIO BOX */
   .cardio-box { border-radius: 10px; padding: 10px 12px; font-size: 13px; line-height: 1.6; border-left: 3px solid; margin-top: 10px; }
   .cardio-box strong { display: block; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 3px; }
+  .cardio-box-push  { background: var(--col-push-bg);  border-color: var(--col-push); }
+  .cardio-box-pull  { background: var(--col-pull-bg);  border-color: var(--col-pull); }
+  .cardio-box-lower { background: var(--col-lower-bg); border-color: var(--col-lower); }
+  .cardio-box-full  { background: var(--col-full-bg);  border-color: var(--col-full); }
+  .cardio-box-rest  { background: var(--col-rest-bg);  border-color: var(--col-rest); }
+  .cardio-box-build { background: var(--col-build-bg); border-color: var(--col-build); }
 
   /* DAY CHIPS */
   .day-select-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 20px; }
@@ -105,7 +121,8 @@
   .toggle { position: relative; display: inline-block; width: 48px; height: 28px; flex-shrink: 0; }
   .toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
   .toggle-track { position: absolute; cursor: pointer; inset: 0; border-radius: 14px; background: var(--border); transition: .3s; }
-  .toggle-track:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background: white; border-radius: 50%; transition: .3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  .toggle-track:before { position: absolute; content: ""; height: 22px; width: 22px; left: 3px; bottom: 3px; background: var(--toggle-thumb); border-radius: 50%; transition: .3s; box-shadow: 0 1px 3px rgba(0,0,0,0.2); }
+  @media (prefers-color-scheme: dark) { .toggle-track:before { box-shadow: 0 1px 3px rgba(0,0,0,0.5); } }
   .toggle input:checked + .toggle-track { background: var(--accent); }
   .toggle input:checked + .toggle-track:before { transform: translateX(20px); }
 
@@ -130,7 +147,7 @@
   .drum-fade::before, .drum-fade::after { content: ''; position: absolute; left: 10%; right: 10%; height: 1px; background: var(--border); }
   .drum-fade::before { top: calc(50% - 22px); }
   .drum-fade::after { top: calc(50% + 22px); }
-  .drum-scroll { height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; overscroll-behavior: contain; }
+  .drum-scroll { height: 100%; overflow-y: scroll; scroll-snap-type: y mandatory; scrollbar-width: none; overscroll-behavior: contain; }
   .drum-scroll::-webkit-scrollbar { display: none; }
   .drum-pad { height: 44px; flex-shrink: 0; }
   .drum-item { height: 44px; scroll-snap-align: center; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; color: var(--text); user-select: none; -webkit-user-select: none; }
@@ -216,10 +233,10 @@
   /* EXERCISE PICKER */
   #ex-picker-overlay, #session-summary-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:200; align-items:flex-end; justify-content:center; }
   #ex-picker-overlay.open, #session-summary-overlay.open { display:flex; }
-  .ex-picker-sheet { background:var(--surface); border-radius:20px 20px 0 0; width:100%; max-width:600px; max-height:82vh; display:flex; flex-direction:column; overflow:hidden; }
+  .bottom-sheet { background:var(--surface); border-radius:20px 20px 0 0; width:100%; max-width:600px; max-height:82vh; display:flex; flex-direction:column; overflow:hidden; }
   .ex-picker-handle { width:36px; height:4px; border-radius:2px; background:var(--border); margin:10px auto 0; flex-shrink:0; }
   .ex-picker-header { display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid var(--border); flex-shrink:0; }
-  .ex-picker-body { flex:1; overflow-y:auto; padding:12px 16px 32px; -webkit-overflow-scrolling:touch; }
+  .ex-picker-body { flex:1; overflow-y:auto; padding:12px 16px 32px; }
   .ex-picker-search { position:relative; margin-bottom:10px; }
   .ex-picker-search input { padding-left:38px; text-align:left; }
   .mg-filter-row { display:flex; gap:6px; overflow-x:auto; padding-bottom:6px; margin-bottom:10px; scrollbar-width:none; }
@@ -302,7 +319,7 @@
 </div>
 
 <div id="ex-picker-overlay">
-  <div class="ex-picker-sheet">
+  <div class="bottom-sheet">
     <div class="ex-picker-handle"></div>
     <div class="ex-picker-header">
       <div style="font-size:16px;font-weight:800;" id="ex-picker-title">Add Exercise</div>
@@ -313,7 +330,7 @@
 </div>
 
 <div id="session-summary-overlay">
-  <div class="ex-picker-sheet">
+  <div class="bottom-sheet">
     <div class="ex-picker-handle"></div>
     <div class="ex-picker-header">
       <div style="font-size:16px;font-weight:800;">Session Summary</div>
@@ -325,12 +342,19 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.12.1';
+var APP_VERSION = '2.12.5';
 
 // ─── STORAGE ───
 var _mem = {};
+var _lsWarnShown = false;
 function lsGet(k) { try { return localStorage.getItem(k); } catch(e) { return _mem[k]||null; } }
-function lsSet(k,v) { try { localStorage.setItem(k,v); } catch(e) { _mem[k]=v; } }
+function lsSet(k,v) {
+  try { localStorage.setItem(k,v); } catch(e) {
+    _mem[k]=v;
+    // Warn once if localStorage is unavailable (private mode / storage full) — data won't survive a reload
+    if(!_lsWarnShown){ _lsWarnShown=true; setTimeout(function(){ showToast('⚠ Storage unavailable — data will be lost on reload'); },500); }
+  }
+}
 
 // ─── GITHUB SYNC ───
 var GH_API = 'https://api.github.com/repos/hitenshah-uk/gym-data/contents/';
@@ -360,13 +384,26 @@ function ghGetSessions() {
     return r.json().then(function(data) {
       return { sessions: JSON.parse(b64dec(data.content)), sha: data.sha };
     });
-  }).catch(function(e) { return e === 'no_token' ? null : null; });
+  }).catch(function(e) { console.warn('[gym-tracker] ghGetSessions error', e); return null; });
 }
 function ghPutSessions(sessions, sha) {
   var body = { message: 'Sync ' + new Date().toISOString().slice(0,10), content: b64enc(JSON.stringify(sessions)) };
   if (sha) body.sha = sha;
   return ghFetch('sessions.json', { method:'PUT', body: JSON.stringify(body) })
-    .then(function(r){ return r.ok; }).catch(function(){ return false; });
+    .then(function(r) {
+      if (r.ok) return true;
+      if (r.status === 409) {
+        // SHA conflict (two devices pushed simultaneously) — re-fetch latest SHA and retry once
+        return ghGetSessions().then(function(fresh) {
+          if (!fresh) return false;
+          var body2 = { message: 'Sync ' + new Date().toISOString().slice(0,10), content: b64enc(JSON.stringify(sessions)) };
+          body2.sha = fresh.sha;
+          return ghFetch('sessions.json', { method:'PUT', body: JSON.stringify(body2) })
+            .then(function(r2){ return r2.ok; }).catch(function(){ return false; });
+        });
+      }
+      return false;
+    }).catch(function(e){ console.warn('[gym-tracker] ghPutSessions error', e); return false; });
 }
 function mergeSessions(a, b) {
   var seen = {}, merged = [];
@@ -437,13 +474,26 @@ function ghGetSettings() {
     if (r.status===404) return {settings:null, sha:null};
     if (!r.ok) throw new Error('HTTP '+r.status);
     return r.json().then(function(data){ return {settings:JSON.parse(b64dec(data.content)), sha:data.sha}; });
-  }).catch(function(){ return null; });
+  }).catch(function(e){ console.warn('[gym-tracker] ghGetSettings error', e); return null; });
 }
 function ghPutSettings(settings, sha) {
   var body={message:'Settings sync '+new Date().toISOString().slice(0,10), content:b64enc(JSON.stringify(settings))};
   if (sha) body.sha=sha;
   return ghFetch('settings.json',{method:'PUT',body:JSON.stringify(body)})
-    .then(function(r){return r.ok;}).catch(function(){return false;});
+    .then(function(r) {
+      if (r.ok) return true;
+      if (r.status === 409) {
+        // SHA conflict — re-fetch latest SHA and retry once
+        return ghGetSettings().then(function(fresh) {
+          if (!fresh) return false;
+          var body2={message:'Settings sync '+new Date().toISOString().slice(0,10), content:b64enc(JSON.stringify(settings))};
+          body2.sha=fresh.sha;
+          return ghFetch('settings.json',{method:'PUT',body:JSON.stringify(body2)})
+            .then(function(r2){return r2.ok;}).catch(function(){return false;});
+        });
+      }
+      return false;
+    }).catch(function(e){ console.warn('[gym-tracker] ghPutSettings error', e); return false; });
 }
 var _settingsSyncTimer=null;
 function debouncedSettingsSync() {
@@ -466,7 +516,8 @@ function fetchSettingsFromGitHub() {
     // Merge: remote wins for all fields except githubToken (stays local)
     var merged=Object.assign({}, local, remote);
     merged.githubToken=local.githubToken;
-    _pauseSettingsSync=true; writeSettings(merged); _pauseSettingsSync=false;
+    _pauseSettingsSync=true;
+    try { writeSettings(merged); } finally { _pauseSettingsSync=false; }
     if (document.getElementById('screen-settings')&&document.getElementById('screen-settings').classList.contains('active')) renderSettings();
     if (document.getElementById('screen-progress')&&document.getElementById('screen-progress').classList.contains('active')) renderProgress();
   });
@@ -941,6 +992,7 @@ function makeDrumHTML(vals, drumId) {
   return h;
 }
 function initDrums() {
+  // 30ms: allow DOM paint to complete before programmatically setting drum scroll positions
   setTimeout(function(){
     logState.exercises.forEach(function(ex,ei){
       ex.sets.forEach(function(set,si){
@@ -964,7 +1016,7 @@ function onDrumScroll(drumId) {
     } else {
       logState.exercises[ei].sets[si].reps = REP_VALS[Math.max(0,Math.min(idx,REP_VALS.length-1))];
     }
-  }, 120);
+  }, 120); // 120ms debounce: waits for scroll-snap to settle before reading position
 }
 
 // ─── PLAN SCREEN ───
@@ -1097,6 +1149,7 @@ function defaultWeight(ls,si) { if(ls&&ls[si]) return parseFloat(ls[si].weight)|
 function defaultReps(ls,si)   { if(ls&&ls[si]) return parseInt(ls[si].reps)||10;   if(ls&&ls[0]) return parseInt(ls[0].reps)||10;   return 10; }
 
 function renderLog() {
+  drumTimers = {}; // clear stale timer keys on each render
   var plan=getPlan(), c=document.getElementById('log-content'), today=todayName();
   if (!logState.selectedDay && plan[today] && !plan[today].rest) {
     logState.selectedDay=today;
@@ -1161,8 +1214,6 @@ function renderLog() {
   // Hint
   html += '<div style="background:'+t.bg+';border:1px solid '+t.color+';border-radius:12px;padding:10px 14px;margin-bottom:16px;font-size:13px;color:var(--text);line-height:1.6;">'
     +'<strong style="color:'+t.color+';">Scroll</strong> the wheels to set weight and reps, then tap <strong style="color:var(--col-done);">✓</strong> to mark each set done.</div>';
-
-  html += '<div id="rest-timer-bar"></div>';
 
   var _logExLib={}; getExLib().forEach(function(x){_logExLib[x.name.toLowerCase()]=x;});
   if (logState.exercises.length===0) {
@@ -1232,6 +1283,11 @@ function renderLog() {
 
 function selectDay(day) {
   var plan=getPlan(); if(plan[day].rest){showToast('Rest day — no exercises');return;}
+  // Guard: confirm before wiping any ticked sets from a different day
+  if(logState.selectedDay && logState.selectedDay !== day) {
+    var hasDone=logState.exercises.some(function(ex){ return ex.sets.some(function(s){ return s.done; }); });
+    if(hasDone && !confirm('You have logged sets for '+logState.selectedDay+'. Switch to '+day+' and lose this progress?')) return;
+  }
   logState.selectedDay=day; logState.cardioDone=false; logState.cardioActual={}; logState.startedAt=null; logState.injuryModified=false; logState.isDeload=false;
   _cardioOtherMode=false;
   dismissRestTimer();
@@ -1239,6 +1295,13 @@ function selectDay(day) {
   renderLog();
 }
 function toggleDone(ei,si) {
+  // Flush drum scroll positions directly from DOM before recording done state —
+  // prevents the 120ms debounce race where tapping ✓ immediately after scrolling
+  // captures the pre-scroll value from logState instead of the new drum position
+  var wEl=document.getElementById('dw-'+ei+'-'+si);
+  var rEl=document.getElementById('dr-'+ei+'-'+si);
+  if(wEl){ var wi=Math.round(wEl.scrollTop/44); logState.exercises[ei].sets[si].weight=WEIGHT_VALS[Math.max(0,Math.min(wi,WEIGHT_VALS.length-1))]; }
+  if(rEl){ var ri=Math.round(rEl.scrollTop/44); logState.exercises[ei].sets[si].reps=REP_VALS[Math.max(0,Math.min(ri,REP_VALS.length-1))]; }
   var nowDone=!logState.exercises[ei].sets[si].done;
   logState.exercises[ei].sets[si].done=nowDone;
   if (nowDone) {
@@ -1283,18 +1346,25 @@ function updateCardioActual(field,val) { if(!logState.cardioActual) logState.car
 function removeLogEx(ei) { logState.exercises.splice(ei,1); renderLog(); }
 function moveLogExUp(ei) { if(ei<=0)return; var tmp=logState.exercises[ei];logState.exercises[ei]=logState.exercises[ei-1];logState.exercises[ei-1]=tmp; renderLog(); }
 function moveLogExDown(ei) { if(ei>=logState.exercises.length-1)return; var tmp=logState.exercises[ei];logState.exercises[ei]=logState.exercises[ei+1];logState.exercises[ei+1]=tmp; renderLog(); }
+var _isSaving = false;
 function doSaveSession() {
+  if(_isSaving){showToast('Already saving…');return;} // guard against double-tap
   if(!logState.selectedDay){showToast('No day selected');return;}
   var plan=getPlan(),sd=plan[logState.selectedDay];
   var exercises=logState.exercises.map(function(ex){ return {name:ex.name,sets:ex.sets.filter(function(s){return parseFloat(s.weight)>0||parseInt(s.reps)>0;})}; }).filter(function(ex){return ex.sets.length>0;});
   if(exercises.length===0){showToast('Log at least one set first');return;}
-  var now=new Date(), saveTs=Date.now();
-  writeSession({id:saveTs,date:now.toISOString(),day:logState.selectedDay,label:sd.label||logState.selectedDay,cardio:getCardioLabel(sd),cardioDone:logState.cardioDone,cardioActual:logState.cardioActual||null,startedAt:logState.startedAt||null,savedAt:saveTs,injuryModified:logState.injuryModified||false,isDeload:logState.isDeload||false,exercises:exercises});
-  showToast('Session saved ✓');
-  logState.selectedDay=null; logState.exercises=[]; logState.cardioActual={}; logState.startedAt=null; logState.injuryModified=false; logState.isDeload=false;
-  dismissRestTimer();
-  renderLog();
-  syncToGitHub(false);
+  _isSaving=true;
+  try {
+    var now=new Date(), saveTs=Date.now();
+    writeSession({id:saveTs,date:now.toISOString(),day:logState.selectedDay,label:sd.label||logState.selectedDay,cardio:getCardioLabel(sd),cardioDone:logState.cardioDone,cardioActual:logState.cardioActual||null,startedAt:logState.startedAt||null,savedAt:saveTs,injuryModified:logState.injuryModified||false,isDeload:logState.isDeload||false,exercises:exercises});
+    showToast('Session saved ✓');
+    logState.selectedDay=null; logState.exercises=[]; logState.cardioActual={}; logState.startedAt=null; logState.injuryModified=false; logState.isDeload=false;
+    dismissRestTimer();
+    renderLog();
+    syncToGitHub(false);
+  } finally {
+    _isSaving=false;
+  }
 }
 
 // ─── SESSION SUMMARY ───
@@ -1378,10 +1448,7 @@ function dismissRestTimer(){
   restTimer.intervalId=null; restTimer.active=false; updateRestTimerDisplay();
 }
 function updateRestTimerDisplay(){
-  var el=document.getElementById('rest-timer-bar');
   var fl=document.getElementById('rest-timer-float');
-  // Always clear the inline bar — only the floating timer is shown
-  if(el){ el.style.cssText=''; el.innerHTML=''; }
   if(!restTimer.active){
     if(fl){ fl.style.cssText='display:none;'; fl.innerHTML=''; }
     return;
@@ -2168,8 +2235,7 @@ function confirmCSVImport() {
   log.sort(function(a,b){ return a.date>b.date?-1:a.date<b.date?1:0; });
   s.weightLog=log;
   _pauseSettingsSync=true;
-  writeSettings(s);
-  _pauseSettingsSync=false;
+  try { writeSettings(s); } finally { _pauseSettingsSync=false; }
   debouncedSettingsSync();
   _pendingImport=[];
   showToast('Imported '+added+' entr'+(added===1?'y':'ies')+' ✓');
@@ -2241,7 +2307,7 @@ function renderHelp() {
   ]);
   html+=hs('✏️ Log tab',[
     {label:'Starting a session', text:'Tap the day chip at the top to select today\'s session. The exercises from your plan load automatically with last-session values pre-filled.'},
-    {label:'Logging sets', text:'Scroll the weight and reps drums to your values, then tap ✓ to mark the set done. A rest timer starts automatically after each set. Set the duration in Settings → Training (60s / 90s / 2 min / 3 min).'},
+    {label:'Logging sets', text:'Scroll the weight and reps drums to your values, then tap ✓ to mark the set done. A rest timer starts automatically after each set. Set the duration in Settings → Training (60s / 90s / 2 min / 3 min). The timer counts accurately in the background — if your screen locks mid-rest, the correct time will show when you unlock.'},
     {label:'Notes and RPE', text:'Each set has an optional note field and an RPE (Rate of Perceived Exertion) field. RPE runs 1–10: 7–8 is a challenging working set, 10 is absolute maximum effort.'},
     {label:'Cardio logging', text:'If your day includes cardio, a box appears below the day header. Tap Elliptical, Treadmill, or Bike to log your equipment in one tap — or choose Other to type a custom name. Fill in actual duration and average HR, then tick ✓ when complete.'},
     {label:'Saving a session', text:'Scroll to the bottom of the log and tap Save Session. The button sits at the bottom of the page so you have to scroll past your exercises to reach it — this prevents accidental saves.'},
@@ -2408,7 +2474,8 @@ var timerState = {
   running:false, paused:false, complete:false,
   type:null, phase:null, secondsLeft:0, phaseTotal:0, round:0, buildRound:0,
   cfg:null, editCfg:null, selectedDay:null,
-  intervalId:null, wakeLock:null, muted:false, audioCtx:null
+  intervalId:null, wakeLock:null, muted:false, audioCtx:null,
+  phaseStartedAt:null, pausedAt:null, pausedMs:0  // timestamp fields for drift-free countdown
 };
 
 function renderTimer() {
@@ -2504,6 +2571,7 @@ function startTimer() {
   timerState.round=0; timerState.buildRound=0; timerState.phase='warmup';
   timerState.secondsLeft=Math.round((parseFloat(cfg.warmUp)||5)*60);
   timerState.phaseTotal=timerState.secondsLeft;
+  timerState.phaseStartedAt=Date.now(); timerState.pausedMs=0; timerState.pausedAt=null;
   // Start beep — 3 ascending tones, unlocks iOS audio context on user gesture
   try {
     if (!timerState.audioCtx) timerState.audioCtx=new(window.AudioContext||window.webkitAudioContext)();
@@ -2526,13 +2594,17 @@ function startTimer() {
 
 function timerTick() {
   if (!timerState.running||timerState.paused) return;
-  timerState.secondsLeft--;
+  // Timestamp-based: calculate remaining time from real elapsed ms, not a decrement counter
+  // — prevents drift when wake lock fails (incoming call, Safari rejection, screen lock)
+  var elapsed=Math.floor((Date.now()-timerState.phaseStartedAt-timerState.pausedMs)/1000);
+  timerState.secondsLeft=Math.max(0, timerState.phaseTotal-elapsed);
   if (timerState.secondsLeft<=0) advanceTimerPhase();
   if (!timerState.complete) renderTimerRunning(document.getElementById('timer-content'));
 }
 
 function setPhase(phase, secs) {
   timerState.phase=phase; timerState.secondsLeft=secs; timerState.phaseTotal=secs;
+  timerState.phaseStartedAt=Date.now(); timerState.pausedMs=0; timerState.pausedAt=null;
 }
 function advanceTimerPhase() {
   var cfg=timerState.cfg, t=timerState.type, ph=timerState.phase;
@@ -2572,7 +2644,14 @@ function finishTimer() {
 }
 function pauseTimer() {
   timerState.paused=!timerState.paused;
-  if (timerState.paused) releaseWakeLock(); else acquireWakeLock();
+  if (timerState.paused) {
+    timerState.pausedAt=Date.now();
+    releaseWakeLock();
+  } else {
+    // Accumulate paused ms so elapsed calculation excludes time spent paused
+    if (timerState.pausedAt) { timerState.pausedMs+=Date.now()-timerState.pausedAt; timerState.pausedAt=null; }
+    acquireWakeLock();
+  }
   renderTimerRunning(document.getElementById('timer-content'));
 }
 function resetTimer() {
@@ -2741,14 +2820,24 @@ function releaseWakeLock() {
   setTimeout(function(){ fetchSettingsFromGitHub(); }, 1500);
   if (!lsGet('gymOnboarded')) setTimeout(function(){ showOnboarding(); }, 400);
   document.addEventListener('visibilitychange', function(){
-    if (document.visibilityState==='visible' && restTimer.active) {
-      var elapsed=Math.floor((Date.now()-restTimer.startedAt)/1000);
-      restTimer.secondsLeft=Math.max(0, restTimer.duration-elapsed);
-      if(restTimer.secondsLeft<=0){
-        restTimer.active=false;
-        if(restTimer.intervalId){ clearInterval(restTimer.intervalId); restTimer.intervalId=null; }
-        updateRestTimerDisplay(); playRestBeep();
-      } else { updateRestTimerDisplay(); }
+    if (document.visibilityState==='visible') {
+      // Resync rest timer
+      if (restTimer.active) {
+        var elapsed=Math.floor((Date.now()-restTimer.startedAt)/1000);
+        restTimer.secondsLeft=Math.max(0, restTimer.duration-elapsed);
+        if(restTimer.secondsLeft<=0){
+          restTimer.active=false;
+          if(restTimer.intervalId){ clearInterval(restTimer.intervalId); restTimer.intervalId=null; }
+          updateRestTimerDisplay(); playRestBeep();
+        } else { updateRestTimerDisplay(); }
+      }
+      // Resync dedicated cardio timer
+      if (timerState.running && !timerState.paused && timerState.phaseStartedAt) {
+        var elapsed2=Math.floor((Date.now()-timerState.phaseStartedAt-timerState.pausedMs)/1000);
+        timerState.secondsLeft=Math.max(0, timerState.phaseTotal-elapsed2);
+        if (timerState.secondsLeft<=0) advanceTimerPhase();
+        if (!timerState.complete) renderTimerRunning(document.getElementById('timer-content'));
+      }
     }
   });
 })();
