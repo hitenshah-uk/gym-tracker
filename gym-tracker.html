@@ -354,7 +354,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.14.2';
+var APP_VERSION = '2.14.3';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -512,12 +512,27 @@ function debouncedSettingsSync() {
   clearTimeout(_settingsSyncTimer);
   _settingsSyncTimer=setTimeout(function(){ syncSettingsToGitHub(); }, 2000);
 }
+// Additive merge of two exercise libraries — override wins on conflicts for non-empty fields
+function _mergeExLib(base, override) {
+  var result = [], nameMap = {};
+  base.forEach(function(x){ result.push(Object.assign({},x)); nameMap[x.name.toLowerCase()]=result.length-1; });
+  override.forEach(function(x){
+    var key=x.name.toLowerCase();
+    if (nameMap[key]===undefined) { result.push(Object.assign({},x)); nameMap[key]=result.length-1; }
+    else { var idx=nameMap[key]; if(x.muscleGroup) result[idx].muscleGroup=x.muscleGroup; if(x.keyLift) result[idx].keyLift=x.keyLift; if(x.note) result[idx].note=x.note; }
+  });
+  result.sort(function(a,b){return a.name.localeCompare(b.name);});
+  return result;
+}
 function syncSettingsToGitHub() {
   if (!getSettings().githubToken) return;
   ghGetSettings().then(function(result){
     if (!result) return;
     var s=getSettings();
-    ghPutSettings(s, result.sha);
+    // Include exercise library in sync payload — merge with remote so we never push less than GitHub already has
+    var remoteLib=(result.settings&&result.settings._exLib)||[];
+    var merged=_mergeExLib(remoteLib, getExLib()); // local wins on conflicts
+    ghPutSettings(Object.assign({},s,{_exLib:merged}), result.sha);
   });
 }
 function fetchSettingsFromGitHub() {
@@ -525,13 +540,24 @@ function fetchSettingsFromGitHub() {
   ghGetSettings().then(function(result){
     if (!result||!result.settings) return;
     var remote=result.settings, local=getSettings();
-    // Merge: remote wins for all fields except githubToken (stays local)
-    var merged=Object.assign({}, local, remote);
-    merged.githubToken=local.githubToken;
+    // Merge exercise library — remote wins on conflicts so other devices' tags come through
+    if (remote._exLib && remote._exLib.length) {
+      var mergedLib=_mergeExLib(getExLib(), remote._exLib);
+      writeExLib(mergedLib);
+      // Rebuild gymExMeta from merged library
+      var newMeta={};
+      mergedLib.forEach(function(x){ if(x.muscleGroup) newMeta[x.name]=x.muscleGroup; });
+      lsSet('gymExMeta',JSON.stringify(newMeta));
+    }
+    // Merge settings — remote wins except githubToken (stays local); strip _exLib before writing
+    var mergedSettings=Object.assign({},local,remote);
+    mergedSettings.githubToken=local.githubToken;
+    delete mergedSettings._exLib;
     _pauseSettingsSync=true;
-    try { writeSettings(merged); } finally { _pauseSettingsSync=false; }
+    try { writeSettings(mergedSettings); } finally { _pauseSettingsSync=false; }
     if (document.getElementById('screen-settings')&&document.getElementById('screen-settings').classList.contains('active')) renderSettings();
     if (document.getElementById('screen-progress')&&document.getElementById('screen-progress').classList.contains('active')) renderProgress();
+    if (document.getElementById('screen-history')&&document.getElementById('screen-history').classList.contains('active')) renderHistory();
   });
 }
 
