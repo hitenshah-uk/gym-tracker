@@ -354,7 +354,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.14.0';
+var APP_VERSION = '2.14.1';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -1623,7 +1623,7 @@ function buildWeekCard() {
   var buckets = {Push:0,Pull:0,Lower:0,Core:0,'Full Body':0,Untagged:0};
   var meta = getExMeta();
   sessions7.forEach(function(s){
-    s.exercises.forEach(function(ex){
+    (s.exercises||[]).forEach(function(ex){
       var mg = meta[ex.name]||'';
       var bucket = MG_BUCKET_MAP[mg]||'Untagged';
       var doneSets = ex.sets.filter(function(st){return st.done;}).length;
@@ -1693,7 +1693,7 @@ function buildWeekCard() {
       var lowerCount=buckets.Lower;
       if(lowerCount===0){lowerDot='🔴';lowerColor='#dc2626';lowerMsg='No lower body work this week';}
       else{lowerDot='🟢';lowerColor='#16a34a';lowerMsg=lowerCount+' sets';}
-      h += '<div style="display:flex;align-items:center;gap:6px;">  <span style="font-size:13px;">'+lowerDot+'</span><span style="font-size:12px;font-weight:700;color:'+lowerColor+';min-width:80px;">Lower body</span><span style="font-size:11px;color:var(--text2);">'+esc(lowerMsg)+'</span></div>';
+      h += '<div style="display:flex;align-items:center;gap:6px;"><span style="font-size:13px;">'+lowerDot+'</span><span style="font-size:12px;font-weight:700;color:'+lowerColor+';min-width:80px;">Lower body</span><span style="font-size:11px;color:var(--text2);">'+esc(lowerMsg)+'</span></div>';
       // Untagged warning
       if (buckets.Untagged>0) {
         h += '<div style="margin-top:10px;font-size:11px;color:var(--text2);background:var(--surface2);border-radius:8px;padding:6px 10px;">⚠ '+buckets.Untagged+' sets from untagged exercises — tag them in the Exercise Library for accurate tracking.</div>';
