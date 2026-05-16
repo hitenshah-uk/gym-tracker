@@ -354,7 +354,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.14.3';
+var APP_VERSION = '2.15.4';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -549,8 +549,17 @@ function fetchSettingsFromGitHub() {
       mergedLib.forEach(function(x){ if(x.muscleGroup) newMeta[x.name]=x.muscleGroup; });
       lsSet('gymExMeta',JSON.stringify(newMeta));
     }
-    // Merge settings — remote wins except githubToken (stays local); strip _exLib before writing
-    var mergedSettings=Object.assign({},local,remote);
+    // Merge settings — local wins for scalar fields (never lose locally-entered data);
+    // array fields (weightLog, measurements, heartRateLog) get additive merge so entries
+    // accumulate across devices; githubToken always stays local; strip _exLib before writing
+    var mergedSettings=Object.assign({},remote,local); // local wins for scalars
+    ['weightLog','measurements','heartRateLog'].forEach(function(key){
+      var loc=local[key]||[], rem=remote[key]||[];
+      var byDate={};
+      rem.forEach(function(e){ byDate[e.date]=e; });
+      loc.forEach(function(e){ byDate[e.date]=e; }); // local entry wins same-date conflict
+      mergedSettings[key]=Object.keys(byDate).sort(function(a,b){return b.localeCompare(a);}).map(function(d){return byDate[d];});
+    });
     mergedSettings.githubToken=local.githubToken;
     delete mergedSettings._exLib;
     _pauseSettingsSync=true;
@@ -873,6 +882,22 @@ function getLastSets(name) {
   for(var i=ss.length-1;i>=0;i--){
     var ex=ss[i].exercises.filter(function(e){return e.name.toLowerCase()===name.toLowerCase();})[0];
     if(ex&&ex.sets.length>0) return ex.sets;
+  }
+  return null;
+}
+// Returns peak weight (or reps for bodyweight) from the most recent session where this exercise
+// had at least one completed (ticked) set. Used for progressive overload alerts.
+function _getPrevExerciseData(name) {
+  var ss=getAllSessions(), nl=name.toLowerCase();
+  for(var i=ss.length-1;i>=0;i--){
+    var ex=(ss[i].exercises||[]).filter(function(e){return e.name.toLowerCase()===nl;})[0];
+    if(!ex) continue;
+    var done=ex.sets.filter(function(st){return st.done;});
+    if(done.length===0) continue;
+    var weights=done.map(function(st){return parseFloat(st.weight)||0;});
+    var repsArr=done.map(function(st){return parseInt(st.reps)||0;});
+    var pw=Math.max.apply(null,weights);
+    return {peakWeight:pw, peakReps:Math.max.apply(null,repsArr), date:ss[i].date, isBodyweight:pw===0};
   }
   return null;
 }
@@ -1303,12 +1328,37 @@ function renderLog() {
       var doneSets=ex.sets.filter(function(s){return s.done;}).length;
       var exLibEnt=_logExLib[ex.name.toLowerCase()]||null;
       var exNote=exLibEnt&&exLibEnt.note?exLibEnt.note:'';
+      // Progressive overload alert — compute before building header HTML
+      var overloadLine='';
+      if (!logState.isDeload && !logState.injuryModified && doneSets>0) {
+        var _olPrev=_getPrevExerciseData(ex.name);
+        if (_olPrev) {
+          var _olDate=new Date(_olPrev.date).toLocaleDateString('en-GB',{day:'numeric',month:'short'});
+          var _olDone=ex.sets.filter(function(st){return st.done;});
+          var _olSpan;
+          if (_olPrev.isBodyweight) {
+            var _olCurR=Math.max.apply(null,_olDone.map(function(st){return parseInt(st.reps)||0;}));
+            var _olRd=_olCurR-_olPrev.peakReps;
+            _olSpan=_olRd>0?'<span style="color:#16a34a;">↑ +'+_olRd+' reps vs '+_olDate+'</span>'
+              :_olRd===0?'<span style="color:var(--text2);">→ Same reps as '+_olDate+'</span>'
+              :'<span style="color:#ea580c;">↓ Down '+Math.abs(_olRd)+' reps from '+_olDate+'</span>';
+          } else {
+            var _olCurW=Math.max.apply(null,_olDone.map(function(st){return parseFloat(st.weight)||0;}));
+            var _olWd=Math.round((_olCurW-_olPrev.peakWeight)*10)/10;
+            _olSpan=_olWd>0?'<span style="color:#16a34a;">↑ +'+_olWd+'kg vs '+_olDate+'</span>'
+              :_olWd===0?'<span style="color:var(--text2);">→ Same weight as '+_olDate+'</span>'
+              :'<span style="color:#ea580c;">↓ Down '+Math.abs(_olWd)+'kg from '+_olDate+'</span>';
+          }
+          overloadLine='<div style="font-size:12px;font-weight:700;margin-top:2px;">'+_olSpan+'</div>';
+        }
+      }
       html += '<div class="card" style="margin-bottom:14px;padding:0;overflow:hidden;border-color:'+t.color+';">'
         +'<div style="background:'+t.bg+';padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">'
         +'<div style="flex:1;min-width:0;"><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:'+t.color+';">Exercise '+(ei+1)+'</div>'
         +'<div style="font-size:16px;font-weight:800;color:var(--text);display:flex;align-items:center;gap:6px;flex-wrap:wrap;">'+esc(ex.name)+exBadge(ex.name)+'</div>'
         +(exNote?'<div style="font-size:12px;font-style:italic;color:var(--text2);margin-top:2px;">'+esc(exNote)+'</div>':'')
         +(doneSets>0?'<div style="font-size:12px;color:var(--col-done);font-weight:700;margin-top:1px;">'+doneSets+' / '+ex.sets.length+' sets done ✓</div>':'')
+        +overloadLine
         +'</div>'
         +'<div style="display:flex;gap:4px;align-items:center;flex-shrink:0;">'
         +(ei>0?'<button class="btn-icon" onclick="moveLogExUp('+ei+')" style="font-size:15px;background:rgba(0,0,0,0.06);border:none;" title="Move up">↑</button>':'')
@@ -1628,6 +1678,101 @@ function renderSparkline(vals, color) {
 }
 
 // ─── HISTORY SCREEN ───
+// Training adherence heatmap — 12 rolling weeks, coloured by session type
+function scrollToSession(id) {
+  var el=document.getElementById('sess-'+id);
+  if (el) { el.scrollIntoView({behavior:'smooth',block:'center'}); }
+}
+var _heatmapOpen=false;
+function toggleHeatmap() { _heatmapOpen=!_heatmapOpen; renderHistory(); }
+function showHeatmapInfo(text) { var el=document.getElementById('heatmap-info'); if(el) el.textContent=text; }
+function buildHeatmap() {
+  // Local date string helper — avoids UTC-offset mismatches (important for BST/GMT)
+  function _lds(d) { var m=d.getMonth()+1,day=d.getDate(); return d.getFullYear()+'-'+(m<10?'0':'')+m+'-'+(day<10?'0':'')+day; }
+  var sessions=getAllSessions();
+  var dateMap={};
+  sessions.forEach(function(s){ if(s.date) dateMap[_lds(new Date(s.date))]=s; });
+  var todayStr=_lds(new Date());
+  // Find Monday of current week
+  var now=new Date(); now.setHours(0,0,0,0);
+  var dow=now.getDay(); // 0=Sun
+  var dToMon=dow===0?6:dow-1;
+  var thisMonday=new Date(now); thisMonday.setDate(thisMonday.getDate()-dToMon);
+  // Start = 11 full weeks before this Monday
+  var startDate=new Date(thisMonday); startDate.setDate(startDate.getDate()-77);
+  // Build 84-cell grid (12 weeks × 7 days)
+  var cells=[]; var monthLabels={}; var curMonth=-1;
+  for (var i=0;i<84;i++) {
+    var d=new Date(startDate); d.setDate(d.getDate()+i);
+    var ds=_lds(d);
+    var wi=Math.floor(i/7);
+    if (d.getMonth()!==curMonth) { curMonth=d.getMonth(); monthLabels[wi]=d.toLocaleDateString('en-GB',{month:'short'}); }
+    cells.push({dateStr:ds,weekIdx:wi,sess:dateMap[ds]||null,isFuture:ds>todayStr,isToday:ds===todayStr});
+  }
+  var sessionCount=cells.filter(function(c){return c.sess&&!c.isFuture;}).length;
+  var h='<div class="card" style="margin-bottom:16px;padding:0;overflow:hidden;">';
+  // Collapsible header
+  h+='<div onclick="toggleHeatmap()" style="padding:12px 14px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">';
+  h+='<div><div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);">Training Adherence — last 12 weeks</div>';
+  if (!_heatmapOpen) { h+='<div style="font-size:13px;color:var(--text2);margin-top:2px;">'+sessionCount+' session'+(sessionCount!==1?'s':'')+' in the last 12 weeks</div>'; }
+  h+='</div>';
+  h+='<span style="font-size:16px;color:var(--text2);font-weight:700;line-height:1;">'+(_heatmapOpen?'▴':'▾')+'</span>';
+  h+='</div>';
+  if (_heatmapOpen) {
+    h+='<div style="padding:0 14px 14px;">';
+    // Day-of-week header
+    h+='<div style="display:grid;grid-template-columns:28px repeat(7,1fr);gap:2px;margin-bottom:2px;">';
+    h+='<div></div>';
+    ['M','T','W','T','F','S','S'].forEach(function(l){h+='<div style="text-align:center;font-size:10px;font-weight:700;color:var(--text2);">'+l+'</div>';});
+    h+='</div>';
+    // Week rows
+    for (var w=0;w<12;w++) {
+      var wCells=cells.slice(w*7,(w+1)*7);
+      h+='<div style="display:grid;grid-template-columns:28px repeat(7,1fr);gap:2px;margin-bottom:2px;">';
+      h+='<div style="font-size:9px;font-weight:700;color:var(--text2);display:flex;align-items:center;line-height:1;">'+(monthLabels[w]||'')+'</div>';
+      wCells.forEach(function(cell){
+        var bg,cursor='default',clickAttr='',titleAttr='';
+        // Build human-readable date string — "Friday 15 May"
+        var _cd=new Date(cell.dateStr+'T12:00:00');
+        var _wds=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+        var _mns=['January','February','March','April','May','June','July','August','September','October','November','December'];
+        var _dlabel=_wds[_cd.getDay()]+' '+_cd.getDate()+' '+_mns[_cd.getMonth()];
+        var numColor,numOpacity='0.75';
+        if (cell.isFuture) {
+          bg='var(--bg,#f5f5f7)'; numColor='var(--text2)'; numOpacity='0.4';
+          titleAttr=' title="'+_dlabel+'"';
+        } else if (cell.sess) {
+          var tc=thLabel(cell.sess.label||cell.sess.day);
+          bg=tc.color; cursor='pointer'; numColor='#fff';
+          var _sl=(cell.sess.label||cell.sess.day).replace(/'/g,'&#39;');
+          var _infoText=_dlabel+' · '+_sl;
+          titleAttr=' title="'+_infoText+'"';
+          clickAttr=' onclick="event.stopPropagation();showHeatmapInfo(\''+_dlabel+' · '+_sl+'\');scrollToSession('+cell.sess.id+')"';
+        } else {
+          bg='var(--border)'; cursor='pointer'; numColor='var(--text2)';
+          titleAttr=' title="'+_dlabel+' · Rest"';
+          clickAttr=' onclick="event.stopPropagation();showHeatmapInfo(\''+_dlabel+' · Rest\')"';
+        }
+        var shadow=cell.isToday?';box-shadow:0 0 0 2px var(--accent)':'';
+        h+='<div style="aspect-ratio:1/1;border-radius:4px;background:'+bg+';cursor:'+cursor+shadow+';display:flex;align-items:flex-end;justify-content:flex-end;"'+titleAttr+clickAttr+'>'
+          +'<span style="font-size:11px;font-weight:700;line-height:1;padding:2px 3px;color:'+numColor+';opacity:'+numOpacity+';">'+_cd.getDate()+'</span>'
+          +'</div>';
+      });
+      h+='</div>';
+    }
+    // Tap info line — updates on cell tap without re-rendering
+    h+='<div id="heatmap-info" style="min-height:18px;font-size:12px;font-weight:600;color:var(--text2);text-align:center;margin-top:6px;"></div>';
+    // Legend
+    h+='<div style="display:flex;gap:10px;margin-top:6px;flex-wrap:wrap;">';
+    [['var(--col-push)','Push'],['var(--col-pull)','Pull'],['var(--col-lower)','Lower'],['var(--col-full)','Full / Core'],['var(--border)','Rest']].forEach(function(item){
+      h+='<div style="display:flex;align-items:center;gap:4px;"><div style="width:10px;height:10px;border-radius:2px;background:'+item[0]+';flex-shrink:0;"></div><span style="font-size:11px;color:var(--text2);">'+item[1]+'</span></div>';
+    });
+    h+='</div>';
+    h+='</div>';
+  }
+  h+='</div>';
+  return h;
+}
 var hOpen={}, hFilter='all', hSearch='', hKeyLifts=false, _hDeleteConfirmId=null;
 // ─── LAST 7 DAYS CARD ───
 var MG_BUCKET_MAP = {
@@ -1764,6 +1909,9 @@ function renderHistory() {
   html += '<div class="filter-chip" style="'+(hKeyLifts?'background:#f59e0b;color:#fff;border-color:#f59e0b;':'')+'" onclick="hKeyLifts=!hKeyLifts;renderHistory()">⭐ Key lifts</div>';
   html += '</div>';
 
+  // Training adherence heatmap (12-week rolling)
+  html += buildHeatmap();
+
   // Last 7 days card
   html += buildWeekCard();
 
@@ -1784,7 +1932,7 @@ function renderHistory() {
     var timeStr=d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
     var isOpen=!!hOpen[s.id], totalSets=s.exercises.reduce(function(n,e){return n+e.sets.length;},0);
     var durDisplay=''; if(s.startedAt&&s.savedAt){var dm=Math.floor((s.savedAt-s.startedAt)/60000);if(dm>0)durDisplay=' · ⏱ '+dm+'min';}
-    html += '<div class="card history-item" onclick="toggleH('+s.id+')" style="border-left:4px solid '+t.color+';">'
+    html += '<div id="sess-'+s.id+'" class="card history-item" onclick="toggleH('+s.id+')" style="border-left:4px solid '+t.color+';">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">'
       +'<div style="flex:1;min-width:0;">'
       +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:'+t.color+';margin-bottom:1px;">'+s.day+'</div>'
