@@ -18,6 +18,7 @@
     --col-rest: #9ca3af;  --col-rest-bg: #f3f4f6;
     --col-done: #16a34a;  --col-done-bg: #dcfce7;
     --col-build: #0891b2; --col-build-bg: #cffafe;
+    --col-warn: #d97706;  --col-warn-bg: #fef3c7;
     --toggle-thumb: #ffffff;
   }
   @media (prefers-color-scheme: dark) {
@@ -31,6 +32,7 @@
       --col-rest: #6b7280;  --col-rest-bg: #1f2937;
       --col-done: #4ade80;  --col-done-bg: #0f2a18;
       --col-build: #22d3ee; --col-build-bg: #164e63;
+      --col-warn: #fbbf24;  --col-warn-bg: #451a03;
       --toggle-thumb: #e0e0e5;
     }
   }
@@ -104,10 +106,16 @@
   .cardio-box-build { background: var(--col-build-bg); border-color: var(--col-build); }
 
   /* DAY CHIPS */
-  .day-select-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-bottom: 20px; }
-  .day-chip { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 8px 2px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; transition: all 0.15s; min-height: 56px; }
-  .day-chip .day-letter { font-size: 11px; font-weight: 800; }
-  .day-chip .day-dot { width: 6px; height: 6px; border-radius: 50%; background: transparent; margin-top: 4px; }
+  .week-strip { margin-bottom: 16px; }
+  .week-pill { display: inline-flex; align-items: center; padding: 3px 10px; border-radius: 20px; font-size: 11px; font-weight: 800; border: 1.5px solid transparent; }
+  .week-pill.done { background: var(--col-done-bg); border-color: var(--col-done); color: var(--col-done); }
+  .week-pill.missed { background: var(--col-warn-bg); border-color: var(--col-warn); color: var(--col-warn); }
+  .week-pill.upcoming { background: var(--surface); border-color: var(--border); color: var(--text2); }
+  .day-select-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 20px; }
+  .day-chip { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 10px 8px 8px; border-radius: 12px; border: 1.5px solid var(--border); background: var(--surface); cursor: pointer; transition: all 0.15s; min-height: 62px; min-width: 64px; flex: 1; }
+  .day-chip .day-chip-label { font-size: 12px; font-weight: 800; text-align: center; line-height: 1.2; }
+  .day-chip .day-chip-day { font-size: 10px; font-weight: 600; margin-top: 3px; }
+  .day-chip .day-chip-badge { position: absolute; top: 4px; right: 6px; font-size: 10px; font-weight: 800; }
 
   /* PLAN EDIT */
   .edit-mode-toggle { font-size: 14px; font-weight: 700; color: var(--accent); background: none; border: none; cursor: pointer; }
@@ -354,7 +362,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.15.4';
+var APP_VERSION = '2.16.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -874,6 +882,29 @@ function getPlan() {
 }
 function writePlan(p) { lsSet('gymPlan', JSON.stringify(p)); }
 
+function getThisWeekPlanStatus() {
+  var now = new Date();
+  var dow = now.getDay(); // 0=Sun, 1=Mon ... 6=Sat
+  var daysFromMon = (dow === 0) ? 6 : dow - 1;
+  var weekStart = new Date(now); weekStart.setHours(0,0,0,0);
+  weekStart.setDate(weekStart.getDate() - daysFromMon);
+  var weekEnd = new Date(weekStart); weekEnd.setDate(weekEnd.getDate() + 7);
+  var sessions = getAllSessions().filter(function(s) {
+    var d = new Date(s.date); return d >= weekStart && d < weekEnd;
+  });
+  var doneDays = {};
+  sessions.forEach(function(s) { if (s.day) doneDays[s.day] = true; });
+  var todayIdx = DAYS.indexOf(todayName());
+  var plan = getPlan(), status = {};
+  DAYS.forEach(function(day) {
+    if (plan[day] && !plan[day].rest) {
+      var idx = DAYS.indexOf(day);
+      status[day] = doneDays[day] ? 'done' : (idx < todayIdx ? 'missed' : 'upcoming');
+    }
+  });
+  return status;
+}
+
 // ─── SESSION DATA ───
 function getAllSessions() { var s=lsGet('gymSessions'); if(s){try{return JSON.parse(s);}catch(e){}} return []; }
 function writeSession(sess) { var a=getAllSessions(); a.push(sess); lsSet('gymSessions',JSON.stringify(a)); }
@@ -1230,15 +1261,40 @@ function renderLog() {
     logState.exercises=plan[today].exercises.map(function(name){ var ls=getLastSets(name); return {name:name,sets:[{weight:defaultWeight(ls,0),reps:defaultReps(ls,0),note:'',rpe:null,done:false}]}; });
   }
 
-  var html = '<div class="day-select-grid">';
+  // This week status strip
+  var wkStatus = getThisWeekPlanStatus();
+  var wkDays = DAYS.filter(function(day){ return !!wkStatus[day]; });
+  if (wkDays.length > 0) {
+    html += '<div class="week-strip">'
+      +'<div class="section-label" style="margin:0 0 8px;">This week</div>'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;">';
+    wkDays.forEach(function(day) {
+      var st = wkStatus[day], lbl = plan[day].label || day;
+      var icon = st==='done' ? '✓ ' : (st==='missed' ? '! ' : '');
+      html += '<span class="week-pill '+st+'">'+icon+esc(lbl)+'</span>';
+    });
+    html += '</div></div>';
+  }
+
+  // Session picker
+  html += '<div class="section-label">Today\'s session</div>';
+  html += '<div class="day-select-grid">';
   DAYS.forEach(function(day,i){
-    var d=plan[day],sel=logState.selectedDay===day,t=th(day);
-    var cs=sel?'background:'+t.color+';border-color:'+t.color+';':'';
-    var lc=sel?'color:#fff;':'color:var(--text2);';
-    var dc=sel?'background:rgba(255,255,255,0.8);':(!d.rest?'background:'+t.color+';':'');
+    var d=plan[day]; if(d.rest) return;
+    var sel=logState.selectedDay===day, t=th(day);
+    var st=wkStatus[day]||'upcoming';
+    var cs=sel?'background:'+t.color+';border-color:'+t.color+';':'border-color:var(--border);';
+    var lc=sel?'color:#fff;':'color:'+t.color+';';
+    var dc=sel?'color:rgba(255,255,255,0.7);':'color:var(--text2);';
+    var badgeCol = sel ? 'rgba(255,255,255,0.85)' : (st==='done' ? 'var(--col-done)' : 'var(--col-warn)');
+    var badge = st==='done' ? '<span class="day-chip-badge" style="color:'+badgeCol+';">✓</span>'
+              : st==='missed' ? '<span class="day-chip-badge" style="color:'+badgeCol+';">!</span>'
+              : '';
     html += '<div class="day-chip" style="'+cs+'" onclick="selectDay(\''+day+'\')">'
-      +'<span class="day-letter" style="'+lc+'">'+DAY_SHORT[i]+'</span>'
-      +'<span class="day-dot" style="'+dc+'"></span></div>';
+      +badge
+      +'<span class="day-chip-label" style="'+lc+'">'+esc(d.label||DAY_SHORT[i])+'</span>'
+      +'<span class="day-chip-day" style="'+dc+'">'+DAY_SHORT[i]+'</span>'
+      +'</div>';
   });
   html += '</div>';
 
@@ -1250,7 +1306,8 @@ function renderLog() {
   // Session header card
   html += '<div class="card" style="border-left:4px solid '+t.color+';margin-bottom:16px;">'
     +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:'+t.color+';">'+logState.selectedDay+'</div>'
-    +'<div style="font-size:18px;font-weight:800;color:'+t.color+';margin-top:2px;">'+esc(sd.label||logState.selectedDay)+'</div>';
+    +'<div style="font-size:18px;font-weight:800;color:'+t.color+';margin-top:2px;">'+esc(sd.label||logState.selectedDay)+'</div>'
+    +(logState.selectedDay!==todayName()?'<div style="font-size:11px;color:'+t.color+';margin-top:5px;font-weight:600;opacity:0.8;">Logging to today · '+esc(new Date().toLocaleDateString('en-GB',{weekday:\'short\',day:\'numeric\',month:\'short\'}))+'</div>':'');
   if (cardioLbl) {
     var zones=calcHRZones(getSettings().age);
     html += '<div class="cardio-box" style="background:'+(logState.cardioDone?'var(--col-done-bg)':t.bg)+';border-color:'+(logState.cardioDone?'var(--col-done)':t.color)+';color:var(--text);">'
