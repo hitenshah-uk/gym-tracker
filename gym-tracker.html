@@ -1262,6 +1262,7 @@ function renderLog() {
   }
 
   // This week status strip
+  var html = '';
   var wkStatus = getThisWeekPlanStatus();
   var wkDays = DAYS.filter(function(day){ return !!wkStatus[day]; });
   if (wkDays.length > 0) {
@@ -1307,7 +1308,7 @@ function renderLog() {
   html += '<div class="card" style="border-left:4px solid '+t.color+';margin-bottom:16px;">'
     +'<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:'+t.color+';">'+logState.selectedDay+'</div>'
     +'<div style="font-size:18px;font-weight:800;color:'+t.color+';margin-top:2px;">'+esc(sd.label||logState.selectedDay)+'</div>'
-    +(logState.selectedDay!==todayName()?'<div style="font-size:11px;color:'+t.color+';margin-top:5px;font-weight:600;opacity:0.8;">Logging to today · '+esc(new Date().toLocaleDateString('en-GB',{weekday:\'short\',day:\'numeric\',month:\'short\'}))+'</div>':'');
+    +(logState.selectedDay!==todayName()?'<div style="font-size:11px;color:'+t.color+';margin-top:5px;font-weight:600;opacity:0.8;">Logging to today · '+esc(new Date().toLocaleDateString('en-GB',{weekday:"short",day:"numeric",month:"short"}))+'</div>':'');
   if (cardioLbl) {
     var zones=calcHRZones(getSettings().age);
     html += '<div class="cardio-box" style="background:'+(logState.cardioDone?'var(--col-done-bg)':t.bg)+';border-color:'+(logState.cardioDone?'var(--col-done)':t.color)+';color:var(--text);">'
