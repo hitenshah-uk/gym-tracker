@@ -3091,6 +3091,10 @@ function renderTimerIdle(c) {
     html += tField('Duration','duration',cfg.duration,'min');
     html += tField('Cool down','coolDown',cfg.coolDown,'min');
   }
+  html += '<div style="border-top:1px solid var(--border);margin-top:10px;padding-top:10px;display:flex;align-items:center;justify-content:space-between;">'
+    + '<span style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);">Total time</span>'
+    + '<span id="timer-total-display" style="font-size:17px;font-weight:800;color:var(--accent);">'+calcTimerTotal(cfg, d.cardioType)+'</span>'
+    + '</div>';
   html += '</div>';
 
   // HR zones card
@@ -3121,8 +3125,37 @@ function tField(label,key,val,unit) {
     +'</div>';
 }
 
+function calcTimerTotal(cfg, type) {
+  var totalSec = 0;
+  if (type === 'intervals') {
+    var warmUp   = (parseFloat(cfg.warmUp)  || 0) * 60;
+    var coolDown = (parseFloat(cfg.coolDown)|| 0) * 60;
+    var rounds   = parseInt(cfg.rounds)     || 0;
+    var work     = parseFloat(cfg.work)     || 0;
+    var rest     = parseFloat(cfg.rest)     || 0;
+    var buildRounds = parseInt(cfg.buildRounds) || 0;
+    var buildWork   = parseFloat(cfg.buildWork) || 0;
+    totalSec = warmUp + (buildRounds * buildWork) + (rounds * (work + rest)) + coolDown;
+  } else {
+    var warmUp   = (parseFloat(cfg.warmUp)  || 0) * 60;
+    var duration = (parseFloat(cfg.duration)|| 0) * 60;
+    var coolDown = (parseFloat(cfg.coolDown)|| 0) * 60;
+    totalSec = warmUp + duration + coolDown;
+  }
+  var m = Math.floor(totalSec / 60), s = Math.round(totalSec % 60);
+  return m + (s > 0 ? 'min ' + s + 'sec' : 'min');
+}
+
 function timerSelectDay(day) { timerState.selectedDay=day; timerState.editCfg=null; renderTimer(); }
-function updateTimerCfg(key,val) { if(!timerState.editCfg)timerState.editCfg={}; timerState.editCfg[key]=parseFloat(val)||0; }
+function updateTimerCfg(key,val) {
+  if(!timerState.editCfg)timerState.editCfg={};
+  timerState.editCfg[key]=parseFloat(val)||0;
+  var el=document.getElementById('timer-total-display');
+  if (el) {
+    var plan=getPlan(), day=timerState.selectedDay;
+    if (day && plan[day]) el.textContent=calcTimerTotal(timerState.editCfg, plan[day].cardioType);
+  }
+}
 
 function startTimer() {
   var plan=getPlan(), day=timerState.selectedDay;
