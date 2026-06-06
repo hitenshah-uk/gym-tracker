@@ -362,7 +362,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.16.0';
+var APP_VERSION = '2.17.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -3037,7 +3037,8 @@ var timerState = {
   type:null, phase:null, secondsLeft:0, phaseTotal:0, round:0, buildRound:0,
   cfg:null, editCfg:null, selectedDay:null,
   intervalId:null, wakeLock:null, muted:false, audioCtx:null,
-  phaseStartedAt:null, pausedAt:null, pausedMs:0  // timestamp fields for drift-free countdown
+  phaseStartedAt:null, pausedAt:null, pausedMs:0,  // timestamp fields for drift-free phase countdown
+  sessionStartedAt:null, totalPausedMs:0, totalSecs:0  // session-level tracking for outer ring and stats
 };
 
 function renderTimer() {
@@ -3167,6 +3168,20 @@ function startTimer() {
   timerState.secondsLeft=Math.round((parseFloat(cfg.warmUp)||5)*60);
   timerState.phaseTotal=timerState.secondsLeft;
   timerState.phaseStartedAt=Date.now(); timerState.pausedMs=0; timerState.pausedAt=null;
+  // Session-level tracking for outer progress ring and Done/Remaining stats
+  timerState.sessionStartedAt=Date.now(); timerState.totalPausedMs=0;
+  if (d.cardioType==='intervals') {
+    var _wu=(parseFloat(cfg.warmUp)||0)*60;
+    var _cd=(parseFloat(cfg.coolDown)||0)*60;
+    var _br=parseInt(cfg.buildRounds)||0;
+    var _bw=parseFloat(cfg.buildWork)||30;
+    var _rr=parseInt(cfg.rounds)||0;
+    var _wk=parseFloat(cfg.work)||0;
+    var _rs=parseFloat(cfg.rest)||0;
+    timerState.totalSecs=Math.round(_wu+(_br*_bw)+(_rr*(_wk+_rs))+_cd);
+  } else {
+    timerState.totalSecs=Math.round(((parseFloat(cfg.warmUp)||0)+(parseFloat(cfg.duration)||0)+(parseFloat(cfg.coolDown)||0))*60);
+  }
   // Start beep — 3 ascending tones, unlocks iOS audio context on user gesture
   try {
     if (!timerState.audioCtx) timerState.audioCtx=new(window.AudioContext||window.webkitAudioContext)();
@@ -3244,7 +3259,7 @@ function pauseTimer() {
     releaseWakeLock();
   } else {
     // Accumulate paused ms so elapsed calculation excludes time spent paused
-    if (timerState.pausedAt) { timerState.pausedMs+=Date.now()-timerState.pausedAt; timerState.pausedAt=null; }
+    if (timerState.pausedAt) { var _pd=Date.now()-timerState.pausedAt; timerState.pausedMs+=_pd; timerState.totalPausedMs+=_pd; timerState.pausedAt=null; }
     acquireWakeLock();
   }
   renderTimerRunning(document.getElementById('timer-content'));
@@ -3277,10 +3292,24 @@ function renderTimerRunning(c) {
   var bpmStr='';
   if (zones&&pc.z1>=0) bpmStr=zones[pc.z1].bpmLow+'–'+zones[pc.z2].bpmHigh+' BPM';
 
-  // SVG progress circle
-  var r=116, cx=130, cy=130, circ=Math.round(2*Math.PI*r*10)/10;
+  // Session-level elapsed/remaining — used for outer ring and stats cards
+  // If paused, include the current in-progress pause in total paused ms so values freeze correctly
+  var _nowMs=Date.now();
+  var _totalPausedNow=timerState.totalPausedMs+(timerState.paused&&timerState.pausedAt?_nowMs-timerState.pausedAt:0);
+  var _sessElapsed=timerState.sessionStartedAt
+    ?Math.min(Math.max(0,Math.floor((_nowMs-timerState.sessionStartedAt-_totalPausedNow)/1000)),timerState.totalSecs)
+    :0;
+  var _sessRemaining=Math.max(0,(timerState.totalSecs||0)-_sessElapsed);
+  var _sessProg=timerState.totalSecs>0?_sessElapsed/timerState.totalSecs:0;
+  function _fmt(s){var m=Math.floor(s/60),ss=s%60;return m+':'+(ss<10?'0':'')+ss;}
+
+  // SVG progress circles — outer ring = session progress, inner ring = phase countdown
+  // Container expanded to 274px to accommodate outer ring (r=130, stroke=5) without clipping
+  var r=116, cx=137, cy=137, circ=Math.round(2*Math.PI*r*10)/10;
+  var rOuter=130, circOuter=Math.round(2*Math.PI*rOuter*10)/10;
   var prog = timerState.phaseTotal>0 ? timerState.secondsLeft/timerState.phaseTotal : 1;
   var offset = Math.round(circ*(1-prog)*10)/10;
+  var outerOffset = Math.round(circOuter*(1-_sessProg)*10)/10;
   var isSmall = (phase==='get_ready'||phase==='build_ready');
   var fontSize = isSmall ? 64 : (timeStr.length >= 5 ? 60 : 80);
 
@@ -3298,11 +3327,17 @@ function renderTimerRunning(c) {
   }
 
   // Circle + countdown
-  html+='<div style="position:relative;width:260px;height:260px;">'
-    +'<svg viewBox="0 0 260 260" style="position:absolute;top:0;left:0;width:260px;height:260px;transform:rotate(-90deg);">'
-    +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+pc.color+'" stroke-opacity="0.15" stroke-width="12"/>'
+  // Outer ring (session progress) drawn first so inner ring renders on top
+  var svgOuter='<circle cx="'+cx+'" cy="'+cy+'" r="'+rOuter+'" fill="none" stroke="var(--col-done)" stroke-opacity="0.15" stroke-width="5"/>'
+    +'<circle cx="'+cx+'" cy="'+cy+'" r="'+rOuter+'" fill="none" stroke="var(--col-done)" stroke-width="5" stroke-linecap="round"'
+    +' stroke-dasharray="'+circOuter+'" stroke-dashoffset="'+outerOffset+'"/>';
+  // Inner ring (phase countdown)
+  var svgInner='<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+pc.color+'" stroke-opacity="0.15" stroke-width="12"/>'
     +'<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="none" stroke="'+pc.color+'" stroke-width="12" stroke-linecap="round"'
-    +' stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"/>'
+    +' stroke-dasharray="'+circ+'" stroke-dashoffset="'+offset+'"/>';
+  html+='<div style="position:relative;width:274px;height:274px;">'
+    +'<svg viewBox="0 0 274 274" style="position:absolute;top:0;left:0;width:274px;height:274px;transform:rotate(-90deg);">'
+    +svgOuter+svgInner
     +'</svg>'
     +'<div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;">'
     +'<div style="font-size:'+fontSize+'px;font-weight:900;line-height:1;color:'+pc.color+';font-variant-numeric:tabular-nums;letter-spacing:-2px;">'+timeStr+'</div>'
@@ -3316,6 +3351,18 @@ function renderTimerRunning(c) {
       +'<div style="font-size:17px;font-weight:800;color:var(--text);">'+bpmStr+'</div>'
       +'</div>';
   }
+
+  // Session progress stats
+  html+='<div style="display:flex;gap:10px;width:100%;">'
+    +'<div style="flex:1;background:var(--col-done-bg);border-radius:10px;padding:8px;text-align:center;">'
+    +'<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--col-done);margin-bottom:2px;">Done</div>'
+    +'<div style="font-size:19px;font-weight:900;color:var(--col-done);font-variant-numeric:tabular-nums;">'+_fmt(_sessElapsed)+'</div>'
+    +'</div>'
+    +'<div style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px;text-align:center;">'
+    +'<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);margin-bottom:2px;">Remaining</div>'
+    +'<div style="font-size:19px;font-weight:900;color:var(--text);font-variant-numeric:tabular-nums;">'+_fmt(_sessRemaining)+'</div>'
+    +'</div>'
+    +'</div>';
 
   html+='<button class="btn btn-primary btn-full" style="height:56px;font-size:20px;font-weight:800;" onclick="pauseTimer()">'+(timerState.paused?'▶ Resume':'⏸ Pause')+'</button>';
   html+='<button class="btn btn-secondary btn-full" style="height:44px;font-size:14px;" onclick="resetTimer()">↺ Reset</button>';
@@ -3364,7 +3411,7 @@ function renderTimerComplete(c) {
     if (buildRounds>0) html+='<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);font-size:13px;color:var(--text2);">+ '+buildRounds+' build round'+(buildRounds>1?'s':'')+'</div>';
   } else {
     html+='<div style="display:flex;justify-content:space-around;gap:8px;">';
-    html+='<div><div style="font-size:28px;font-weight:900;color:'+t.color+';">'+(cfg.duration||30)+'</div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);">Min steady</div></div>';
+        html+='<div><div style="font-size:28px;font-weight:900;color:'+t.color+';">'+(cfg.duration||30)+'</div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);">Min steady</div></div>';
     html+='<div style="width:1px;background:var(--border);"></div>';
     html+='<div><div style="font-size:28px;font-weight:900;color:'+t.color+';">'+totalMins+'</div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:var(--text2);">Total mins</div></div>';
     html+='</div>';
