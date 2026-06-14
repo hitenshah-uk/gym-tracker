@@ -3126,23 +3126,43 @@ function tField(label,key,val,unit) {
     +'</div>';
 }
 
-function calcTimerTotal(cfg, type) {
-  var totalSec = 0;
+// Builds the exact phase sequence advanceTimerPhase() will run through for this config,
+// so the displayed total, the live progress ring, and the completion stats can never drift
+// from what the countdown actually does. Mirrors advanceTimerPhase's own fallback defaults
+// and rounding so a config that relies on defaults is represented accurately.
+function calcSessionPhases(cfg, type) {
+  var phases = [];
+  var warmUp   = Math.round((parseFloat(cfg.warmUp)  || 5) * 60);
+  var coolDown = Math.round((parseFloat(cfg.coolDown)|| 5) * 60);
+  phases.push({phase:'warmup', secs:warmUp});
   if (type === 'intervals') {
-    var warmUp   = (parseFloat(cfg.warmUp)  || 0) * 60;
-    var coolDown = (parseFloat(cfg.coolDown)|| 0) * 60;
-    var rounds   = parseInt(cfg.rounds)     || 0;
-    var work     = parseFloat(cfg.work)     || 0;
-    var rest     = parseFloat(cfg.rest)     || 0;
     var buildRounds = parseInt(cfg.buildRounds) || 0;
-    var buildWork   = parseFloat(cfg.buildWork) || 0;
-    totalSec = warmUp + (buildRounds * buildWork) + (rounds * (work + rest)) + coolDown;
+    var buildWork   = Math.round(parseFloat(cfg.buildWork) || 30);
+    var rest        = Math.round(parseFloat(cfg.rest) || 90);
+    var work        = Math.round(parseFloat(cfg.work) || 40);
+    var rounds      = Math.max(1, parseInt(cfg.rounds) || 10);
+    for (var i=0; i<buildRounds; i++) {
+      phases.push({phase:'build_ready', secs:3});
+      phases.push({phase:'build', secs:buildWork});
+      phases.push({phase:'rest', secs:rest});
+    }
+    for (var r=0; r<rounds; r++) {
+      phases.push({phase:'get_ready', secs:3});
+      phases.push({phase:'work', secs:work});
+      if (r < rounds-1) phases.push({phase:'rest', secs:rest});
+    }
   } else {
-    var warmUp   = (parseFloat(cfg.warmUp)  || 0) * 60;
-    var duration = (parseFloat(cfg.duration)|| 0) * 60;
-    var coolDown = (parseFloat(cfg.coolDown)|| 0) * 60;
-    totalSec = warmUp + duration + coolDown;
+    var duration = Math.round((parseFloat(cfg.duration) || 30) * 60);
+    phases.push({phase:'steady', secs:duration});
   }
+  phases.push({phase:'cooldown', secs:coolDown});
+  return phases;
+}
+function calcSessionTotalSecs(cfg, type) {
+  return calcSessionPhases(cfg, type).reduce(function(sum,p){ return sum+p.secs; }, 0);
+}
+function calcTimerTotal(cfg, type) {
+  var totalSec = calcSessionTotalSecs(cfg, type);
   var m = Math.floor(totalSec / 60), s = Math.round(totalSec % 60);
   return m + (s > 0 ? 'min ' + s + 'sec' : 'min');
 }
@@ -3170,18 +3190,7 @@ function startTimer() {
   timerState.phaseStartedAt=Date.now(); timerState.pausedMs=0; timerState.pausedAt=null;
   // Session-level tracking for outer progress ring and Done/Remaining stats
   timerState.sessionStartedAt=Date.now(); timerState.totalPausedMs=0;
-  if (d.cardioType==='intervals') {
-    var _wu=(parseFloat(cfg.warmUp)||0)*60;
-    var _cd=(parseFloat(cfg.coolDown)||0)*60;
-    var _br=parseInt(cfg.buildRounds)||0;
-    var _bw=parseFloat(cfg.buildWork)||30;
-    var _rr=parseInt(cfg.rounds)||0;
-    var _wk=parseFloat(cfg.work)||0;
-    var _rs=parseFloat(cfg.rest)||0;
-    timerState.totalSecs=Math.round(_wu+(_br*_bw)+(_rr*(_wk+_rs))+_cd);
-  } else {
-    timerState.totalSecs=Math.round(((parseFloat(cfg.warmUp)||0)+(parseFloat(cfg.duration)||0)+(parseFloat(cfg.coolDown)||0))*60);
-  }
+  timerState.totalSecs = calcSessionTotalSecs(cfg, d.cardioType);
   // Start beep — 3 ascending tones, unlocks iOS audio context on user gesture
   try {
     if (!timerState.audioCtx) timerState.audioCtx=new(window.AudioContext||window.webkitAudioContext)();
@@ -3375,15 +3384,7 @@ function renderTimerComplete(c) {
   var cfg=timerState.cfg, t=th(timerState.selectedDay||'Tuesday');
 
   // Calculate total session time
-  var totalSecs;
-  if (timerState.type==='intervals') {
-    var bRounds=parseInt(cfg.buildRounds)||0;
-    var bTime=bRounds*((parseFloat(cfg.buildWork)||30)+(parseFloat(cfg.rest)||90));
-    var wTime=(parseInt(cfg.rounds)||10)*((parseFloat(cfg.work)||40)+(parseFloat(cfg.rest)||90));
-    totalSecs=Math.round((parseFloat(cfg.warmUp)||5)*60+bTime+wTime+(parseFloat(cfg.coolDown)||5)*60);
-  } else {
-    totalSecs=Math.round(((parseFloat(cfg.warmUp)||5)+(parseFloat(cfg.duration)||30)+(parseFloat(cfg.coolDown)||5))*60);
-  }
+  var totalSecs = calcSessionTotalSecs(cfg, timerState.type);
   var totalMins=Math.round(totalSecs/60);
 
   var html='<div style="display:flex;flex-direction:column;align-items:center;gap:18px;padding:28px 20px 32px;text-align:center;">';
