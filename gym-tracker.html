@@ -362,7 +362,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.17.2';
+var APP_VERSION = '2.18.0';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -585,7 +585,7 @@ var WEIGHT_VALS = [];
 function buildWeightVals() {
   var inc = parseFloat(getSettings().drumIncrement) || 2.5;
   WEIGHT_VALS = [];
-  for (var w = 0; w <= 150; w = Math.round((w + inc) * 100) / 100) WEIGHT_VALS.push(w);
+  for (var w = 0; w <= 300; w = Math.round((w + inc) * 100) / 100) WEIGHT_VALS.push(w); // v2.18.0: cap raised 150 → 300 (leg press headroom)
 }
 
 // ─── CONSTANTS ───
@@ -966,7 +966,7 @@ function _getPrevExerciseData(name) {
 function getSettings() {
   var s = lsGet('gymSettings');
   if (s) { try { return JSON.parse(s); } catch(e) {} }
-  return { age:'', heightCm:'', sex:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, restDuration:90, activityLevel:1.55, measurements:[], weightLog:[], heartRateLog:[], githubToken:'', rmWeight:'', rmReps:'' };
+  return { age:'', heightCm:'', sex:'', weightKg:'', bodyFatPct:'', trainingStartDate:'', drumIncrement:2.5, restDuration:90, activityLevel:1.55, measurements:[], weightLog:[], heartRateLog:[], githubToken:'', rmWeight:'', rmReps:'', goalWeightKg:'67', goalBodyFatPct:'25' };
 }
 var _pauseSettingsSync=false;
 function writeSettings(s) { lsSet('gymSettings', JSON.stringify(s)); if(!_pauseSettingsSync) debouncedSettingsSync(); }
@@ -980,6 +980,15 @@ function getLatestBodyStats() {
   if (latestWeight===null && s.weightKg) latestWeight=parseFloat(s.weightKg);
   if (latestBF===null && s.bodyFatPct) latestBF=parseFloat(s.bodyFatPct);
   return { weightKg:latestWeight, bodyFatPct:latestBF };
+}
+// v2.18.0: seed goal fields into pre-existing settings objects once (mirrors migrateWeightLog
+// precedent). Unset (pre-upgrade) becomes the old hardcoded 67 / 25 so charts are unchanged;
+// an empty string set later by the user means "no target line" and is never re-seeded.
+function migrateGoals() {
+  var s=getSettings(), changed=false;
+  if (s.goalWeightKg===undefined) { s.goalWeightKg='67'; changed=true; }
+  if (s.goalBodyFatPct===undefined) { s.goalBodyFatPct='25'; changed=true; }
+  if (changed) writeSettings(s);
 }
 function migrateWeightLog() {
   var s=getSettings();
@@ -1009,8 +1018,22 @@ function bmiInfo(bmi) {
   return { label:'Obese', color:'#dc2626' };
 }
 function calcMaxHR(age) { return age ? 220 - parseInt(age) : null; }
+// v2.18.0: latest logged resting HR from the Progress screen (heartRateLog is stored newest-first).
+// NaN-safe: parseInt||0 coerces missing/corrupt values to 0, which the range check rejects.
+// Out-of-range values (0, 500) fall back to 50 rather than being clamped to a wrong bound.
+function getLatestRestingHR() {
+  var log = getSettings().heartRateLog;
+  if (log && log.length) {
+    var v = parseInt(log[0].bpm) || 0;
+    if (v >= 30 && v <= 100) return v;
+  }
+  return 50;
+}
+// v2.18.0: zones now use the Karvonen formula (percent of heart rate reserve) instead of
+// plain percent-of-max: bpm = (maxHR - restingHR) * pct + restingHR
 function calcHRZones(age) {
   var max = calcMaxHR(age); if (!max) return null;
+  var rhr = getLatestRestingHR();
   return [
     { num:1, label:'Warm up / Recovery',     desc:'50–60%', pctLow:0.50, pctHigh:0.60, color:'#9ca3af' },
     { num:2, label:'Fat burn / Steady state', desc:'60–70%', pctLow:0.60, pctHigh:0.70, color:'#2563eb' },
@@ -1019,7 +1042,7 @@ function calcHRZones(age) {
     { num:5, label:'Max effort',              desc:'90–100%',pctLow:0.90, pctHigh:1.00, color:'#dc2626' }
   ].map(function(z) {
     return { num:z.num, label:z.label, desc:z.desc, color:z.color,
-      bpmLow:Math.round(max*z.pctLow), bpmHigh:Math.round(max*z.pctHigh) };
+      bpmLow:Math.round((max-rhr)*z.pctLow+rhr), bpmHigh:Math.round((max-rhr)*z.pctHigh+rhr) };
   });
 }
 function calcBMR(wKg, hCm, age) {
@@ -2153,7 +2176,7 @@ function buildSettingsCalcsHTML() {
 
   // HR Zones
   if (zones) {
-    h += '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Heart Rate Zones</div>';
+    h += '<div style="margin-top:4px;"><div style="font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;">Heart Rate Zones (Karvonen · resting HR '+getLatestRestingHR()+')</div>';
     zones.forEach(function(z) {
       h += '<div class="zone-row">'
         +'<div class="zone-dot" style="background:'+z.color+';"></div>'
@@ -2192,6 +2215,10 @@ function renderSettings() {
     +'<button class="seg-btn'+(s.sex==='female'?' active':'')+'" onclick="updateSetting(\'sex\',\'female\');renderSettings();">Female</button>'
     +'<button class="seg-btn'+(!s.sex?' active':'')+'" onclick="updateSetting(\'sex\',\'\');renderSettings();">Not set</button>'
     +'</div></div>'
+    +'<div class="stats-grid" style="margin-top:12px;">'
+    +'<div><label>Goal weight (kg)</label><input type="number" inputmode="decimal" min="30" max="200" step="0.5" value="'+esc(s.goalWeightKg)+'" oninput="updateSetting(\'goalWeightKg\',this.value)" placeholder="—"></div>'
+    +'<div><label>Goal body fat (%)</label><input type="number" inputmode="decimal" min="3" max="60" step="0.5" value="'+esc(s.goalBodyFatPct)+'" oninput="updateSetting(\'goalBodyFatPct\',this.value)" placeholder="—"></div>'
+    +'</div>'
     +'</div>';
 
   // Calculated Metrics
@@ -2694,8 +2721,12 @@ function renderProgress() {
   // Draw charts after DOM paint
   setTimeout(function(){
     var isDark=window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches;
-    if (filteredWeight.length>=1) drawBodyChart('chart-weight', filteredWeight, isDark?'#60a5fa':'#2563eb', 67, '67kg target', 'kg');
-    if (filteredBF.length>=1) drawBodyChart('chart-bf', filteredBF, isDark?'#fb923c':'#ea580c', 25, '25% target', '%');
+    // v2.18.0: targets come from settings; empty/unset → null → drawBodyChart skips the line
+    var _gs=getSettings();
+    var _gwRaw=_gs.goalWeightKg, _gw=(_gwRaw===''||_gwRaw===undefined)?null:(parseFloat(_gwRaw)||null);
+    var _gbRaw=_gs.goalBodyFatPct, _gb=(_gbRaw===''||_gbRaw===undefined)?null:(parseFloat(_gbRaw)||null);
+    if (filteredWeight.length>=1) drawBodyChart('chart-weight', filteredWeight, isDark?'#60a5fa':'#2563eb', _gw, _gw!==null?_gw+'kg target':'', 'kg');
+    if (filteredBF.length>=1) drawBodyChart('chart-bf', filteredBF, isDark?'#fb923c':'#ea580c', _gb, _gb!==null?_gb+'% target':'', '%');
     var hrLog2=getSettings().heartRateLog||[];
     if (hrLog2.length>=1) drawHRChart('chart-hr', hrLog2, isDark?'#f472b6':'#db2777');
   }, 0);
@@ -2918,12 +2949,12 @@ function renderHelp() {
   ]);
   html+=hs('📈 Progress screen',[
     {label:'Accessing it', text:'Tap "📈 Body Composition & Measurements" in Settings to open the Progress screen.'},
-    {label:'Weight and body fat log', text:'Add dated entries for your weight (kg) and body fat %. Each entry appears as a data point on the trend charts. Targets are 67kg and 25% body fat. The log shows your 3 most recent entries by default — tap "Show all" to see the full history.'},
+    {label:'Weight and body fat log', text:'Add dated entries for your weight (kg) and body fat %. Each entry appears as a data point on the trend charts. Target lines come from your goal weight and goal body fat % in Settings — clear a goal there to hide its line. The log shows your 3 most recent entries by default — tap "Show all" to see the full history.'},
     {label:'VeSync import', text:'Export a CSV from the VeSync app and import it here. Only new dates are added — existing entries are never overwritten.'},
     {label:'Body measurements', text:'Log waist, hips, chest, arms, and thigh measurements with dates. Waist-to-hip ratio (WHR) is calculated automatically when both waist and hips are entered. Set your Biological Sex in Settings to see a Healthy / At risk / High risk label alongside the ratio. More reliable than weight alone for tracking body recomposition.'}
   ]);
   html+=hs('⚙️ Settings',[
-    {label:'Personal stats', text:'Enter your age and height for personalised metrics: BMI, max heart rate, BMR, TDEE, and heart rate zones. These feed into the Log and Timer screens.'},
+    {label:'Personal stats', text:'Enter your age and height for personalised metrics: BMI, max heart rate, BMR, TDEE, and heart rate zones. Zones use the Karvonen formula with your most recent resting heart rate from the Progress screen (50 assumed if none logged), so logging your resting HR keeps your cardio targets accurate. Set your goal weight and goal body fat % here too — they drive the target lines on the Progress charts. These feed into the Log and Timer screens.'},
     {label:'1RM Calculator', text:'Enter a recent weight and rep count to estimate your one rep max using the Epley formula.'},
     {label:'Drum increment', text:'Controls the step size of the weight drum (1 kg, 2.5 kg, or 5 kg). Set it to match the smallest plate you use.'},
     {label:'Rest timer duration', text:'Set how long the rest timer runs after each set: 60s, 90s, 2 min, or 3 min. 90s suits most hypertrophy work; 2–3 min is better for heavy compound lifts like deadlifts and squats.'},
@@ -3130,7 +3161,7 @@ function renderTimerIdle(c) {
   // HR zones card
   if (zones) {
     html += '<div class="card" style="margin-bottom:12px;">';
-    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:8px;">Heart Rate Zones (age '+getSettings().age+')</div>';
+    html += '<div style="font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:0.6px;color:var(--text2);margin-bottom:8px;">Heart Rate Zones (age '+getSettings().age+' · resting HR '+getLatestRestingHR()+')</div>';
     zones.forEach(function(z){
       html += '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;">'
         +'<div style="width:10px;height:10px;border-radius:50%;background:'+z.color+';flex-shrink:0;"></div>'
@@ -3489,6 +3520,7 @@ function releaseWakeLock() {
   seedKeyLifts();
   migrateMetaToLib();
   migrateWeightLog();
+  migrateGoals();
   setTimeout(function(){ syncToGitHub(false); }, 1000);
   setTimeout(function(){ fetchSettingsFromGitHub(); }, 1500);
   if (!lsGet('gymOnboarded')) setTimeout(function(){ showOnboarding(); }, 400);
