@@ -362,7 +362,7 @@
 
 <script>
 // ─── VERSION ───
-var APP_VERSION = '2.17.1';
+var APP_VERSION = '2.17.2';
 
 // ─── STORAGE ───
 var _mem = {};
@@ -551,7 +551,9 @@ function fetchSettingsFromGitHub() {
     // Merge exercise library — remote wins on conflicts so other devices' tags come through
     if (remote._exLib && remote._exLib.length) {
       var mergedLib=_mergeExLib(getExLib(), remote._exLib);
-      writeExLib(mergedLib);
+      // v2.17.2: guard — the fetch path must not trigger a sync push via writeExLib
+      _pauseSettingsSync=true;
+      try { writeExLib(mergedLib); } finally { _pauseSettingsSync=false; }
       // Rebuild gymExMeta from merged library
       var newMeta={};
       mergedLib.forEach(function(x){ if(x.muscleGroup) newMeta[x.name]=x.muscleGroup; });
@@ -625,7 +627,17 @@ var MUSCLE_GROUPS = [
 ];
 function getExMeta() { var s=lsGet('gymExMeta'); if(s){try{return JSON.parse(s);}catch(e){}} return {}; }
 function setExMeta(name,mg) { var m=getExMeta(); m[name]=mg; lsSet('gymExMeta',JSON.stringify(m)); }
-function setExMetaByIdx(day,idx,mg) { var p=getPlan(); setExMeta(p[day].exercises[idx],mg); }
+// v2.17.2: single source of truth for tags — writes gymExLib (canonical) AND gymExMeta (derived cache).
+// Unlike addToExLib, an empty mg deliberately CLEARS the tag in both stores.
+function setExerciseTag(name, mg) {
+  if (!name) return;
+  var lib=getExLib(), found=false;
+  lib.forEach(function(x){ if(x.name.toLowerCase()===name.toLowerCase()){ x.muscleGroup=mg||''; found=true; } });
+  if (!found) { lib.push({name:name, muscleGroup:mg||'', note:'', keyLift:false}); lib.sort(function(a,b){return a.name.localeCompare(b.name);}); }
+  writeExLib(lib);
+  setExMeta(name, mg||'');
+}
+function setExMetaByIdx(day,idx,mg) { var p=getPlan(); var name=p[day]&&p[day].exercises[idx]; if(name) setExerciseTag(name,mg); }
 function exBadge(name) {
   var mg=getExMeta()[name]; if(!mg) return '';
   var g=MUSCLE_GROUPS.filter(function(x){return x.key===mg;})[0]; if(!g||!g.key) return '';
@@ -634,7 +646,7 @@ function exBadge(name) {
 
 // ─── EXERCISE LIBRARY ───
 function getExLib() { var s=lsGet('gymExLib'); if(s){try{return JSON.parse(s);}catch(e){}} return []; }
-function writeExLib(lib) { lsSet('gymExLib',JSON.stringify(lib)); }
+function writeExLib(lib) { lsSet('gymExLib',JSON.stringify(lib)); if(!_pauseSettingsSync) debouncedSettingsSync(); } // v2.17.2: tags now push without needing an unrelated settings change
 function addToExLib(name, mg) {
   var lib=getExLib();
   var existing=null;
@@ -668,6 +680,23 @@ function seedKeyLifts() {
   lib.forEach(function(x){ if(defaults.indexOf(x.name.toLowerCase())!==-1) x.keyLift=true; });
   writeExLib(lib);
   lsSet('gymExLibKL','1');
+}
+// v2.17.2: one-time rescue — folds meta-only tags (set via the old plan-edit dropdown path) into
+// gymExLib so the launch-time meta rebuild can no longer erase them. Additive only: never
+// overwrites a non-empty library tag. Idempotent — no-ops once everything is in the library.
+function migrateMetaToLib() {
+  var meta=getExMeta(), lib=getExLib(), rescued=0, skipped=0, changed=false;
+  var byName={};
+  lib.forEach(function(x,i){ byName[x.name.toLowerCase()]=i; });
+  Object.keys(meta).forEach(function(name){
+    var mg=meta[name]; if(!mg) return;
+    var idx=byName[name.toLowerCase()];
+    if (idx===undefined) { lib.push({name:name, muscleGroup:mg, note:'', keyLift:false}); byName[name.toLowerCase()]=lib.length-1; rescued++; changed=true; }
+    else if (!lib[idx].muscleGroup) { lib[idx].muscleGroup=mg; rescued++; changed=true; }
+    else if (lib[idx].muscleGroup!==mg) { skipped++; }
+  });
+  if (changed) { lib.sort(function(a,b){return a.name.localeCompare(b.name);}); writeExLib(lib); }
+  if (rescued||skipped) console.log('[gym-tracker] migrateMetaToLib: '+rescued+' rescued, '+skipped+' skipped (library tag already set)');
 }
 
 // ─── EXERCISE PICKER ───
@@ -3458,6 +3487,7 @@ function releaseWakeLock() {
   buildWeightVals();
   seedExLib();
   seedKeyLifts();
+  migrateMetaToLib();
   migrateWeightLog();
   setTimeout(function(){ syncToGitHub(false); }, 1000);
   setTimeout(function(){ fetchSettingsFromGitHub(); }, 1500);
